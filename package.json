@@ -32,7 +32,7 @@
     "build-example": "mkdir -p ./public && rm -rf ./public/* && VITE_DEBUG_MODE=staging vite --mode staging --base=\"/repo-name\" build",
     "build-docs": "typedoc ./src/index.ts",
     "build": "mkdir -p ./dist && rm -rf ./dist/* && npm run build-cjs && npm run build-esm && npm run build-esm:min && npm run build-cjs:min",
-    "start": "vite",
+    "start": "concurrently --kill-others \"npx partykit dev\" \"npx vite\"",
     "toc": "markdown-toc --maxdepth 3 -i README.md",
     "preversion": "npm run lint",
     "version": "npm run toc && auto-changelog -p --template keepachangelog --breaking-pattern 'BREAKING CHANGE:' && git add CHANGELOG.md README.md",
