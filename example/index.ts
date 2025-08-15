@@ -11,7 +11,7 @@ const debug = Debug()
 const form = await waitFor('form')
 const state = State()
 
-const connector = await waitFor('.connection-status form')
+const connector = await waitFor('.connector form')
 
 connector?.addEventListener('submit', ev => {
     ev.preventDefault()
