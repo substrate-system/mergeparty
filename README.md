@@ -1,85 +1,97 @@
-# package name here
-[![tests](https://img.shields.io/github/actions/workflow/status/substrate-system/package/nodejs.yml?style=flat-square)](https://github.com/substrate-system/package/actions/workflows/nodejs.yml)
-[![types](https://img.shields.io/npm/types/@substrate-system/icons?style=flat-square)](README.md)
+# Merge Party
+[![tests](https://img.shields.io/github/actions/workflow/status/substrate-system/merge-party2/nodejs.yml?style=flat-square)](https://github.com/substrate-system/merge-party2/actions/workflows/nodejs.yml)
+[![types](https://img.shields.io/npm/types/@substrate-system/merge-party2?style=flat-square)](README.md)
 [![module](https://img.shields.io/badge/module-ESM%2FCJS-blue?style=flat-square)](README.md)
 [![semantic versioning](https://img.shields.io/badge/semver-2.0.0-blue?logo=semver&style=flat-square)](https://semver.org/)
 [![Common Changelog](https://nichoth.github.io/badge/common-changelog.svg)](./CHANGELOG.md)
-[![install size](https://flat.badgen.net/packagephobia/install/@nichoth/session-cookie)](https://packagephobia.com/result?p=@nichoth/session-cookie)
-[![gzip size](https://img.shields.io/bundlephobia/minzip/@substrate-system/package?style=flat-square)](https://bundlephobia.com/@substrate-system/name/package/route-event)
-[![dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg?style=flat-square)](package.json)
+[![install size](https://flat.badgen.net/packagephobia/install/@substrate-system/merge-party2)](https://packagephobia.com/result?p=@substrate-system/merge-party2)
 [![license](https://img.shields.io/badge/license-Big_Time-blue?style=flat-square)](LICENSE)
 
+Automerge + Partykit.
 
-`<package description goes here>`
-
-[See a live demo](https://namespace.github.io/package-name/)
+Based on [automerge-repo-sync-server](https://github.com/automerge/automerge-repo-sync-server).
 
 <details><summary><h2>Contents</h2></summary>
+
 <!-- toc -->
+
+- [Install](#install)
+- [API](#api)
+  * [ESM](#esm)
+  * [Common JS](#common-js)
+- [Use](#use)
+  * [JS](#js)
+- [Develop](#develop)
+  * [start a localhost server](#start-a-localhost-server)
+  * [start partykit](#start-partykit)
+  * [RAM](#ram)
+
+<!-- tocstop -->
+
 </details>
 
-## install
-
-Installation instructions
+## Install
 
 ```sh
-npm i -S @namespace/package
+npm i -S @substrate-system/merge-party2
 ```
 
 ## API
 
-This exposes ESM and common JS via [package.json `exports` field](https://nodejs.org/api/packages.html#exports).
+This exposes ESM and common JS via
+[package.json `exports` field](https://nodejs.org/api/packages.html#exports).
 
 ### ESM
 ```js
-import '@namespace/package/module'
+import { MergeParty } from '@substrate-system/merge-party2'
 ```
 
 ### Common JS
 ```js
-require('@namespace/package/module')
+require('@substrate-system/merge-party2')
 ```
 
-## CSS
-
-### Import CSS
-
-```js
-import '@namespace/package-name/css'
-```
-
-Or minified:
-```js
-import '@namespace/package-name/css/min'
-```
-
-### Customize CSS via some variables
-
-```css
-component-name {
-    --example: pink;
-}
-```
-
-## use
-
-`usage instructions here`
+## Use
 
 ### JS
 ```js
-import '@namespace/package/module'
+import { party } from '@substrate-system/merge-party2'
 ```
 
-### pre-built JS
-This package exposes minified JS files too. Copy them to a location that is
-accessible to your web server, then link to them in HTML.
+## Develop
 
-#### copy
+### start a localhost server
+
+Use vite + local partykit server.
+
 ```sh
-cp ./node_modules/@namespace/package/dist/module.min.js ./public
+npm start
 ```
 
-#### HTML
-```html
-<script type="module" src="./module.min.js"></script>
+### start partykit
+
+```sh
+npx partykit dev
+```
+
+
+### RAM
+
+[Each room has 128 MiB RAM](https://docs.partykit.io/guides/persisting-state-into-storage/)
+
+Should create a partykit room using the automerge document ID as the room name,
+to keep memory usage low.
+
+-------
+
+The URL to health check the local server:
+
+```
+http://localhost:1999/parties/main/automerge-demo
+```
+
+You should see a response
+
+```
+👍 All good
 ```
