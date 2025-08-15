@@ -1,12 +1,9 @@
 import { waitFor } from '@substrate-system/dom'
-import Debug from '@substrate-system/debug'
 import { effect } from '@substrate-system/signs'
 import { State, statusMessages } from './state.js'
 import '@substrate-system/text-input'
+import Debug from '@substrate-system/debug'
 const debug = Debug()
-export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
-    'http://localhost:1999' :
-    'https://merge-party.nichoth.partykit.dev')
 
 /**
  * This runs in the browser.

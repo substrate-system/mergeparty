@@ -13,23 +13,19 @@ export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
     'http://localhost:1999' :
     'https://merge-party2.nichoth.partykit.dev')
 
-const WS_URL = (import.meta.env.DEV ?
-    'http://localhost:1999' :
-    'https://merge-party2.nichoth.partykit.dev')
-
 export type Status = 'connecting'|'connected'|'disconnected'
 
-export type PartyState<T=any> = {
+export type ExampleAppState<T=any> = {
     repo:Repo;
     status:Sign<Status>;
     document:Sign<DocHandle<T>|null>;
     party:PartySocket|null;
 }
 
-export function State ():PartyState {
+export function State ():ExampleAppState {
     const repo = new Repo({
         network: [
-            new WebSocketClientAdapter(WS_URL),
+            new WebSocketClientAdapter(PARTYKIT_HOST),
         ],
         storage: new IndexedDBStorageAdapter(),
     })
