@@ -9,7 +9,7 @@ export const CORS = {
         'Origin, X-Requested-With, Content-Type, Accept, Authorization',
 }
 
-export default class Server implements Party.Server {
+export class MergeParty implements Party.Server {
     readonly room:Party.Room
     readonly repo:Repo
 
@@ -123,4 +123,4 @@ export default class Server implements Party.Server {
     }
 }
 
-Server satisfies Party.Worker
+MergeParty satisfies Party.Worker
