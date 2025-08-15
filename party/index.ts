@@ -1,4 +1,5 @@
 import type * as Party from 'partykit/server'
+import { PartyKitNetworkAdapter } from './partykit-network-adapter.js'
 
 export const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -25,18 +26,28 @@ export default class Server implements Party.Server {
         }
 
         const url = new URL(req.url)
+        // /parties/<partyName>/<roomId>
+        const base = `/parties/main/${this.room.id}`
 
-        if (url.pathname === '/') {
-            return new Response('👍 All good')
+        // Derive subpath inside this party ("/", "/health", etc.)
+        let subpath = '/'
+        if (url.pathname === base || url.pathname === `${base}/`) {
+            subpath = '/'
+        } else if (url.pathname.startsWith(`${base}/`)) {
+            subpath = url.pathname.slice(base.length) // e.g. "/health"
         }
 
-        if (url.pathname === '/health') {
+        if (subpath === '/') {
+            return new Response('👍 All good', { headers: CORS })
+        }
+
+        if (subpath === '/health') {
             return Response.json({
                 status: 'ok',
                 room: this.room.id,
-                repoInitialized: !!this.repo,
-                connectedPeers: Array.from(this.room.getConnections()).length
-            })
+                connectedPeers: Array.from(this.room.getConnections()).length,
+            },
+            { headers: CORS })
         }
 
         return new Response('Not Found', { status: 404 })
@@ -51,20 +62,53 @@ export default class Server implements Party.Server {
   url: ${new URL(ctx.request.url).pathname}`
         )
 
-        // let's send a message to the connection
-        conn.send('hello from server')
+        // Notify other peers about this new peer
+        const peerCandidateMessage = {
+            type: 'peer-candidate',
+            peerId: conn.id,
+            peerMetadata: {}
+        }
+
+        this.room.broadcast(JSON.stringify(peerCandidateMessage), [conn.id])
     }
 
-    onMessage (message: string, sender: Party.Connection) {
-        // let's log the message
-        console.log(`connection ${sender.id} sent message: ${message}`)
+    onMessage (message:string|ArrayBuffer, sender:Party.Connection) {
+        try {
+            const msgString = typeof message === 'string' ? message : new TextDecoder().decode(message)
+            const parsed = JSON.parse(msgString)
 
-        // as well as broadcast it to all the other connections in the room...
-        this.room.broadcast(
-            `${sender.id}: ${message}`,
-            // ...except for the connection it came from
-            [sender.id]
-        )
+            console.log(`Message from ${sender.id}:`, parsed.type || 'unknown')
+
+            // Handle automerge repo messages
+            if (parsed.targetId) {
+                // Route message to specific target
+                const targetConnection = Array.from(this.room.getConnections())
+                    .find(conn => conn.id === parsed.targetId)
+
+                if (targetConnection) {
+                    targetConnection.send(msgString)
+                } else {
+                    console.warn(`Target peer ${parsed.targetId} not found`)
+                }
+            } else {
+                // Broadcast to all other peers
+                this.room.broadcast(msgString, [sender.id])
+            }
+        } catch (error) {
+            console.error('Error parsing message:', error)
+            // Fallback: broadcast raw message
+            this.room.broadcast(message, [sender.id])
+        }
+    }
+
+    onClose (conn: Party.Connection) {
+        // Notify other peers about disconnection
+        const peerDisconnectedMessage = {
+            type: 'peer-disconnected',
+            peerId: conn.id
+        }
+
+        this.room.broadcast(JSON.stringify(peerDisconnectedMessage), [conn.id])
     }
 }
 

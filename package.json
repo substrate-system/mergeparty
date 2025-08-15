@@ -40,6 +40,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@automerge/automerge-repo": "^2.2.0",
     "partysocket": "1.1.5"
   },
   "devDependencies": {
