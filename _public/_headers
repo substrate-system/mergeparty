@@ -1,0 +1,4 @@
+# set for all pages
+# https://docs.netlify.com/routing/headers/#syntax-for-the-headers-file
+/*
+    X-Robots-Tag: noindex

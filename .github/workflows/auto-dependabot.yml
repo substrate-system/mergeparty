@@ -1,0 +1,40 @@
+name: Auto-merge Dependabot PRs
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+    branches: [main]  # Or your default branch
+    paths:
+      - 'dependabot/**'  # Or your Dependabot branch prefix
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'  # Only trigger for Dependabot PRs
+
+    steps:
+    # Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Run CI Tests
+    - name: Run Tests
+      run: |
+        npm install
+        npm test
+
+    # Merge the PR if tests are successful
+    - name: Merge PR
+      # Ensure tests pass and there's no 'do-not-merge' label
+      if: success() && github.event.pull_request.labels.*.name != 'do-not-merge'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { context, github } = require('@actions/github');
+          const prNumber = context.payload.pull_request.number;
+          github.rest.pulls.merge({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber,
+            merge_method: 'merge' // Use 'squash', 'merge', or 'rebase' as desired
+          });

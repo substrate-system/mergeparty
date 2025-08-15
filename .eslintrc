@@ -1,0 +1,46 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "ignorePatterns": ["lib.es5.d.ts"],
+  "parserOptions": {
+    "requireConfigFile": false
+  },
+  "extends": [
+    "standard",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "plugins": [
+    "@typescript-eslint"
+  ],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "operator-linebreak": ["off"],
+    "multiline-ternary": "off",
+    "@typescript-eslint/consistent-type-imports": [
+      "error",
+      {
+        "prefer": "type-imports"
+      }
+    ],
+    "no-multiple-empty-lines": [
+      "error",
+      {
+        "max": 1,
+        "maxEOF": 1
+      }
+    ],
+    "indent": ["error", 4, {
+      "SwitchCase": 1,
+      "ignoredNodes": ["TemplateLiteral *"]
+    }],
+    "comma-dangle": "off",
+    "no-multi-spaces": ["error", { "ignoreEOLComments": true }]
+  }
+}
