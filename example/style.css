@@ -1,0 +1,187 @@
+@import url("../node_modules/@substrate-system/css-normalize/dist/index.min.css");
+@import url("../node_modules/@substrate-system/a11y/dist/index.min.css");
+@import url("../node_modules/@substrate-system/text-input/dist/style.css");
+
+/*
+    Custom media queries
+    See https://lightningcss.dev/transpilation.html#custom-media-queries
+*/
+@custom-media --mobile (max-width: 768px);
+@custom-media --desktop (min-width: 769px);
+@custom-media --dark (prefers-color-scheme: dark);
+
+:root {
+    --maxw: 35rem;
+    --error-bgc: red;
+    --focus-border-color: #00d3ff;
+    --off-white: #FAF9F6;
+    --danger: red;
+    --dark-bgc: #1f2937;
+    --dark-color: #f9fafb;
+    --status-connecting: #fbbf24; /* yellow */
+    --status-connected: #10b981;  /* green */
+    --status-disconnected: #ef4444; /* red */
+}
+
+body {
+    /* green so easy to tell if variables are broken */
+    opacity: 1!important;
+    background-color: var(--off-white, green);
+    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    max-width: 30rem;
+    margin: 0 auto;
+    margin-bottom: 8rem;
+    margin-top: 1rem;
+}
+
+form {
+    max-width: 30rem;
+    margin: 0 auto;
+}
+
+.controls {
+    text-align: right;
+    margin-top: 1rem;
+}
+
+textarea {
+    transition: border-color 0.2s ease-in-out,
+                outline-color 0.2s ease-in-out;
+    min-height: 20rem;
+    min-width: 100%;
+    outline: 1px solid;
+    outline-color: transparent;
+    border: 1px solid;
+    padding: 1rem;
+
+    &:focus, &:active, &:focus-visible {
+        border-color: var(--focus-border-color);
+        outline-color: var(--focus-border-color);
+        border-radius: 0;
+    }
+}
+
+/*
+    see https://www.abeautifulsite.net/posts/flash-of-undefined-custom-elements/
+*/
+:not(:defined) {
+    visibility: hidden;
+}
+
+text-input {
+    & .input input {
+        border-radius: 0;
+        width: 100%;
+    }
+}
+
+.status {
+    width: 100%;
+}
+
+.connector {
+    border: 1px solid;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    padding-top: 1.4rem;
+    background-color: white;
+
+    & text-input {
+        margin-bottom: 0.5rem;
+    }
+
+    & .instructions {
+        opacity: 0.8;
+    }
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 1rem;
+    padding-bottom: 0;
+    max-width: 30rem;
+
+    & > div {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+}
+
+.connection-indicator {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    transition: background-color 0.3s ease;
+}
+
+.connection-text {
+    font-weight: 500;
+}
+
+/* Status-specific styles */
+.connection-status[data-status="connecting"] .connection-indicator {
+    background-color: var(--status-connecting);
+    animation: pulse 2s infinite;
+}
+
+.connection-status[data-status="connected"] .connection-indicator {
+    background-color: var(--status-connected);
+}
+
+.connection-status[data-status="disconnected"] .connection-indicator {
+    background-color: var(--status-disconnected);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+button {
+    cursor: pointer;
+    border: 1px solid;
+    border-radius: 0;
+    padding: 0.4rem 1.5rem;
+    background-color: white;
+    outline: 2px solid transparent;
+    outline-color: transparent;
+    transition: border-color 0.2s ease-in-out,
+                outline-color 0.2s ease-in-out;
+
+    &:hover, &:focus {
+        outline-color: var(--focus-border-color);
+        border-color: var(--focus-border-color);
+    }
+}
+
+hr {
+    margin: 3rem 0;
+}
+
+@media (--dark) {
+    body {
+        background-color: var(--dark-bgc);
+        color: var(--dark-color);
+    }
+    
+    .connection-status {
+        background-color: var(--dark-bgc);
+        border-color: #374151;
+        color: var(--dark-color);
+    }
+}
+
+@media (--mobile) {
+}
+
+@media (--desktop) {
+}

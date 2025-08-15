@@ -6,11 +6,10 @@
     "noEmit": true
   },
   "include": [
-    "party/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "example",
-    "src",
     "test"
   ]
 }

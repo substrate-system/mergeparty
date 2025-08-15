@@ -3,10 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Example</title>
+    <link rel="stylesheet" href="/style.css">
+    <title>Merge Party Example</title>
 </head>
-<body>
-    <div id="root"></div>
+
+<body style="opacity: 0;">
+    <div id="root">
+        <div class="connector">
+            <form>
+                <text-input
+                    aria-describedby="doc-id-instructions"
+                    display-name="Document ID"
+                    title="Document ID"
+                    required
+                    name="document-id"
+                ></text-input>
+
+                <p class="instructions" id="doc-id-instructions">
+                    The document ID you want to edit. If you leave this blank,
+                    then a new document will be created.
+                </p>
+
+                <div
+                    class="connection-status"
+                    role="status"
+                    aria-live="polite"
+                    data-status="disconnected"
+                >
+                    <div>
+                        <span class="connection-indicator" aria-hidden="true"></span>
+                        <span class="connection-text">Disconnected</span>
+                    </div>
+                    <span class="visually-hidden">
+                        WebSocket connection status: Connecting to server...
+                    </span>
+
+                    <button type="submit">Connect</button>
+                </div>
+            </form>
+        </div>
+
+        <form>
+            <textarea name="text" id="text"></textarea>
+            <div class="controls">
+                <button type="submit">Submit</button>
+            </div>
+        </form>
+    </div>
+
     <script type="module" src="./index.ts"></script>
-  </body>
+</body>
 </html>
