@@ -1,6 +1,7 @@
 import type * as Party from 'partykit/server'
-import { Repo } from '@substrate-system/automerge-repo-slim'
-import { PartyKitNetworkAdapter } from './partykit-network-adapter.js'
+import { cbor } from '@substrate-system/automerge-repo-slim'
+
+const { encode, decode } = cbor
 
 export const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -11,19 +12,9 @@ export const CORS = {
 
 export class MergeParty implements Party.Server {
     readonly room:Party.Room
-    readonly repo:Repo
 
     constructor (room:Party.Room) {
         this.room = room
-
-        const adapter = new PartyKitNetworkAdapter({
-            host: 'localhost:1999',
-            room: room.id
-        })
-
-        this.repo = new Repo({
-            network: [adapter]
-        })
     }
 
     // HTTP requests
@@ -73,55 +64,101 @@ export class MergeParty implements Party.Server {
   url: ${new URL(ctx.request.url).pathname}`
         )
 
-        // Notify other peers about this new peer
+        // Notify other peers about this new peer using CBOR encoding
         const peerCandidateMessage = {
             type: 'peer-candidate',
             peerId: conn.id,
             peerMetadata: {}
         }
 
-        this.room.broadcast(JSON.stringify(peerCandidateMessage), [conn.id])
+        const encoded = encode(peerCandidateMessage)
+        this.room.broadcast(encoded.buffer.slice(
+            encoded.byteOffset,
+            encoded.byteOffset + encoded.byteLength
+        ), [conn.id])
     }
 
     onMessage (message:string|ArrayBuffer, sender:Party.Connection) {
         try {
-            const msgString = (typeof message === 'string' ?
-                message :
-                new TextDecoder().decode(message))
-            const parsed = JSON.parse(msgString)
+            // Handle binary messages (CBOR-encoded Automerge sync messages)
+            if (message instanceof ArrayBuffer) {
+                console.log(`Binary message from ${sender.id} (${message.byteLength} bytes)`)
+                // Broadcast binary message to all other peers
+                this.room.broadcast(message, [sender.id])
+                return
+            }
+
+            let parsed:any
+
+            if (typeof message === 'string') {
+                // Handle string messages as JSON
+                parsed = JSON.parse(message)
+            } else {
+                // Handle binary messages (Uint8Array from TextDecoder) as CBOR
+                try {
+                    const msgBytes = new Uint8Array(message)
+                    parsed = decode(msgBytes)
+                } catch {
+                    // Fallback to JSON parsing if CBOR fails
+                    const msgString = new TextDecoder().decode(message)
+                    parsed = JSON.parse(msgString)
+                }
+            }
 
             console.log(`Message from ${sender.id}:`, parsed.type || 'unknown')
 
-            // Handle automerge repo messages
-            if (parsed.targetId) {
-                // Route message to specific target
-                const targetConnection = Array.from(this.room.getConnections())
-                    .find(conn => conn.id === parsed.targetId)
+            // Handle automerge messages - relay them to other peers
+            if (parsed.senderId || parsed.targetId) {
+                // Route message to specific target if specified
+                if (parsed.targetId) {
+                    const targetConnection = Array.from(this.room.getConnections())
+                        .find(conn => conn.id === parsed.targetId)
 
-                if (targetConnection) {
-                    targetConnection.send(msgString)
+                    if (targetConnection) {
+                        // Re-encode as CBOR before sending
+                        const encoded = encode(parsed)
+                        targetConnection.send(encoded.buffer.slice(
+                            encoded.byteOffset,
+                            encoded.byteOffset + encoded.byteLength
+                        ))
+                    } else {
+                        console.warn(`Target peer ${parsed.targetId} not found`)
+                    }
                 } else {
-                    console.warn(`Target peer ${parsed.targetId} not found`)
+                    // Broadcast to all other peers as CBOR
+                    const encoded = encode(parsed)
+                    this.room.broadcast(encoded.buffer.slice(
+                        encoded.byteOffset,
+                        encoded.byteOffset + encoded.byteLength
+                    ), [sender.id])
                 }
-            } else {
-                // Broadcast to all other peers
-                this.room.broadcast(msgString, [sender.id])
+                return
             }
+
+            // Handle other message types (peer discovery, etc.)
+            const encoded = encode(parsed)
+            this.room.broadcast(encoded.buffer.slice(
+                encoded.byteOffset,
+                encoded.byteOffset + encoded.byteLength
+            ), [sender.id])
         } catch (error) {
             console.error('Error parsing message:', error)
-            // Fallback -- broadcast raw message
-            this.room.broadcast(message, [sender.id])
+            // Don't fallback to broadcasting raw messages for sync errors
         }
     }
 
     onClose (conn:Party.Connection) {
-        // Notify other peers about disconnection
+        // Notify other peers about disconnection using CBOR encoding
         const peerDisconnectedMessage = {
             type: 'peer-disconnected',
             peerId: conn.id
         }
 
-        this.room.broadcast(JSON.stringify(peerDisconnectedMessage), [conn.id])
+        const encoded = encode(peerDisconnectedMessage)
+        this.room.broadcast(encoded.buffer.slice(
+            encoded.byteOffset,
+            encoded.byteOffset + encoded.byteLength
+        ), [conn.id])
     }
 }
 

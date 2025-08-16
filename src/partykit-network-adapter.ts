@@ -3,9 +3,12 @@ import {
     NetworkAdapter,
     type PeerId,
     type Message,
-    type PeerMetadata
+    type PeerMetadata,
+    cbor
 } from '@substrate-system/automerge-repo-slim'
 import PartySocket from 'partysocket'
+
+const { encode, decode } = cbor
 
 interface PartyKitNetworkAdapterOptions {
     host?:string
@@ -13,6 +16,9 @@ interface PartyKitNetworkAdapterOptions {
     party?:string
 }
 
+/**
+ * We use this in the client-side code.
+ */
 export class PartyKitNetworkAdapter extends NetworkAdapter {
     socket:PartySocket|null = null
     #isReady = false
@@ -77,6 +83,9 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             room: this.#options.room
         })
 
+        // Set binary type to arraybuffer for CBOR messages
+        this.socket.binaryType = 'arraybuffer'
+
         this.socket.addEventListener('open', () => {
             this.#isReady = true
             console.log('PartyKit connection opened')
@@ -84,9 +93,37 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
 
         this.socket.addEventListener('message', (event) => {
             try {
+                // Handle binary CBOR messages (all Automerge messages are CBOR-encoded)
+                if (event.data instanceof ArrayBuffer) {
+                    const message = decode(new Uint8Array(event.data)) as any
+
+                    // Handle peer discovery messages from the server
+                    if (message.type === 'peer-candidate') {
+                        this.emit('peer-candidate', {
+                            peerId: message.peerId,
+                            peerMetadata: message.peerMetadata || {}
+                        })
+                        return
+                    }
+
+                    if (message.type === 'peer-disconnected') {
+                        this.emit('peer-disconnected', {
+                            peerId: message.peerId
+                        })
+                        return
+                    }
+
+                    // Handle automerge repo messages
+                    if (message.senderId && message.targetId && message.type) {
+                        this.emit('message', message as Message)
+                    }
+                    return
+                }
+
+                // Fallback for text messages (shouldn't happen with proper CBOR encoding)
+                console.warn('Received non-binary message, this should not happen with CBOR')
                 const parsed = JSON.parse(event.data)
 
-                // Handle peer discovery messages from the server
                 if (parsed.type === 'peer-candidate') {
                     this.emit('peer-candidate', {
                         peerId: parsed.peerId,
@@ -99,12 +136,6 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
                     this.emit('peer-disconnected', {
                         peerId: parsed.peerId
                     })
-                    return
-                }
-
-                // Handle automerge repo messages
-                if (parsed.senderId && parsed.targetId && parsed.type) {
-                    this.emit('message', parsed as Message)
                 }
             } catch (error) {
                 console.error('Failed to parse message:', error)
@@ -142,7 +173,12 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         }
 
         try {
-            this.socket.send(JSON.stringify(message))
+            // Encode all messages as CBOR and send as binary
+            const encoded = encode(message)
+            this.socket.send(encoded.buffer.slice(
+                encoded.byteOffset,
+                encoded.byteOffset + encoded.byteLength
+            ))
         } catch (error) {
             console.error('Failed to send message:', error)
         }

@@ -1,10 +1,8 @@
 import type { PartySocket } from 'partysocket'
-import {
-    IndexedDBStorageAdapter
-} from '@automerge/automerge-repo-storage-indexeddb'
+import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb'
 import { PartyKitNetworkAdapter } from '../src/partykit-network-adapter.js'
 import { type Sign, sign } from '@substrate-system/signs'
-import { type DocHandle, Repo } from '@automerge/automerge-repo'
+import { type DocHandle, Repo } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 const debug = Debug()
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
@@ -32,6 +30,25 @@ export function State ():ExampleAppState {
         status: sign('disconnected'),
         party: null
     }
+}
+
+State.disconnect = function (state:ReturnType<typeof State>) {
+    // Close the PartySocket if it exists
+    if (state.party) {
+        state.party.close()
+    }
+
+    // Remove all network adapters from the repo
+    const adapters = state.repo.networkSubsystem.adapters
+    adapters.forEach(adapter => {
+        if (adapter instanceof PartyKitNetworkAdapter) {
+            adapter.disconnect()
+            state.repo.networkSubsystem.removeNetworkAdapter(adapter)
+        }
+    })
+
+    // Update status
+    state.status.value = 'disconnected'
 }
 
 State.connect = async function (

@@ -23,6 +23,17 @@
     --status-disconnected: #ef4444; /* red */
 }
 
+.doc-id {
+    margin-top: 1rem;
+    gap: 0.4rem;
+    display: flex;
+    flex-direction: column;
+
+    & span {
+        font-weight: 100;
+    }
+}
+
 body {
     /* green so easy to tell if variables are broken */
     opacity: 1!important;
