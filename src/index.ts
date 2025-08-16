@@ -27,7 +27,7 @@ export class MergeParty implements Party.Server {
     }
 
     // HTTP requests
-    async onRequest (req:Party.Request): Promise<Response> {
+    async onRequest (req:Party.Request):Promise<Response> {
         if (req.method === 'OPTIONS') {
             // respond to cors preflight requests
             return new Response(null, {
@@ -64,7 +64,7 @@ export class MergeParty implements Party.Server {
         return new Response('Not Found', { status: 404 })
     }
 
-    onConnect (conn: Party.Connection, ctx: Party.ConnectionContext) {
+    onConnect (conn:Party.Connection, ctx:Party.ConnectionContext) {
         // A websocket just connected!
         console.log(
       `Connected:
@@ -85,7 +85,9 @@ export class MergeParty implements Party.Server {
 
     onMessage (message:string|ArrayBuffer, sender:Party.Connection) {
         try {
-            const msgString = typeof message === 'string' ? message : new TextDecoder().decode(message)
+            const msgString = (typeof message === 'string' ?
+                message :
+                new TextDecoder().decode(message))
             const parsed = JSON.parse(msgString)
 
             console.log(`Message from ${sender.id}:`, parsed.type || 'unknown')
@@ -107,12 +109,12 @@ export class MergeParty implements Party.Server {
             }
         } catch (error) {
             console.error('Error parsing message:', error)
-            // Fallback: broadcast raw message
+            // Fallback -- broadcast raw message
             this.room.broadcast(message, [sender.id])
         }
     }
 
-    onClose (conn: Party.Connection) {
+    onClose (conn:Party.Connection) {
         // Notify other peers about disconnection
         const peerDisconnectedMessage = {
             type: 'peer-disconnected',

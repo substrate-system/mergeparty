@@ -8,18 +8,18 @@ import {
 import PartySocket from 'partysocket'
 
 interface PartyKitNetworkAdapterOptions {
-    host?: string
-    room: string
-    party?: string
+    host?:string
+    room:string
+    party?:string
 }
 
 export class PartyKitNetworkAdapter extends NetworkAdapter {
-    #socket: PartySocket | null = null
+    #socket:PartySocket|null = null
     #isReady = false
-    #readyPromise: Promise<void> | null = null
-    #options: PartyKitNetworkAdapterOptions
+    #readyPromise:Promise<void> | null = null
+    #options:PartyKitNetworkAdapterOptions
 
-    constructor (options: PartyKitNetworkAdapterOptions) {
+    constructor (options:PartyKitNetworkAdapterOptions) {
         super()
         this.#options = {
             host: options.host || 'localhost:1999',
@@ -28,11 +28,11 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         }
     }
 
-    isReady (): boolean {
+    isReady ():boolean {
         return this.#isReady
     }
 
-    whenReady (): Promise<void> {
+    whenReady ():Promise<void> {
         if (this.#isReady) {
             return Promise.resolve()
         }
@@ -63,7 +63,7 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         return this.#readyPromise
     }
 
-    connect (peerId: PeerId, peerMetadata?: PeerMetadata) {
+    connect (peerId:PeerId, peerMetadata?:PeerMetadata) {
         this.peerId = peerId
         this.peerMetadata = peerMetadata
 
@@ -133,7 +133,7 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         this.peerMetadata = undefined
     }
 
-    send (message: Message) {
+    send (message:Message) {
         if (!this.#socket || !this.#isReady) {
             console.warn('Cannot send message: socket not connected')
             return
