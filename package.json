@@ -42,6 +42,7 @@
   "dependencies": {
     "@automerge/automerge-repo": "^2.2.0",
     "@automerge/automerge-repo-sync-server": "^0.2.8",
+    "@substrate-system/automerge-repo-slim": "^2.3.2",
     "partykit": "^0.0.115",
     "partysocket": "1.1.5"
   },

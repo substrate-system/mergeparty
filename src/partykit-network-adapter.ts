@@ -4,7 +4,7 @@ import {
     type PeerId,
     type Message,
     type PeerMetadata
-} from '@automerge/automerge-repo'
+} from '@substrate-system/automerge-repo-slim'
 import PartySocket from 'partysocket'
 
 interface PartyKitNetworkAdapterOptions {

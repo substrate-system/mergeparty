@@ -1,5 +1,5 @@
 import type * as Party from 'partykit/server'
-import { Repo } from '@automerge/automerge-repo'
+import { Repo } from '@substrate-system/automerge-repo-slim'
 import { PartyKitNetworkAdapter } from './partykit-network-adapter.js'
 
 export const CORS = {
