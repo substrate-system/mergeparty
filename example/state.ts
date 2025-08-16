@@ -2,9 +2,7 @@ import { PartySocket } from 'partysocket'
 import {
     IndexedDBStorageAdapter
 } from '@automerge/automerge-repo-storage-indexeddb'
-import {
-    WebSocketClientAdapter
-} from '@automerge/automerge-repo-network-websocket'
+import { PartyKitNetworkAdapter } from '../src/partykit-network-adapter.js'
 import { type Sign, sign } from '@substrate-system/signs'
 import { type DocHandle, Repo } from '@automerge/automerge-repo'
 import Debug from '@substrate-system/debug'
@@ -25,7 +23,10 @@ export type ExampleAppState<T=any> = {
 export function State ():ExampleAppState {
     const repo = new Repo({
         network: [
-            new WebSocketClientAdapter(PARTYKIT_HOST),
+            new PartyKitNetworkAdapter({
+                host: PARTYKIT_HOST,
+                room: 'automerge-sync'
+            }),
         ],
         storage: new IndexedDBStorageAdapter(),
     })
@@ -44,8 +45,7 @@ State.connect = function (
 ):PartySocket {
     const party = new PartySocket({
         host: PARTYKIT_HOST,
-        room: roomId,
-        query: { token: createHeader() }
+        room: roomId
     })
 
     state.party = party
@@ -84,11 +84,4 @@ export const statusMessages = {
     connecting: 'Connecting to server...',
     connected: 'Connected',
     disconnected: 'Disconnected'
-}
-
-/**
- * Placeholder
- */
-function createHeader () {
-    return 'abc123'
 }
