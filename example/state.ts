@@ -1,4 +1,4 @@
-import { PartySocket } from 'partysocket'
+import type { PartySocket } from 'partysocket'
 import {
     IndexedDBStorageAdapter
 } from '@automerge/automerge-repo-storage-indexeddb'
@@ -21,13 +21,8 @@ export type ExampleAppState<T=any> = {
 }
 
 export function State ():ExampleAppState {
+    // Create repo without network adapter first
     const repo = new Repo({
-        network: [
-            new PartyKitNetworkAdapter({
-                host: PARTYKIT_HOST,
-                room: 'automerge-sync'
-            }),
-        ],
         storage: new IndexedDBStorageAdapter(),
     })
 
@@ -39,14 +34,26 @@ export function State ():ExampleAppState {
     }
 }
 
-State.connect = function (
+State.connect = async function (
     state:ReturnType<typeof State>,
-    roomId:string
-):PartySocket {
-    const party = new PartySocket({
+    documentId:string
+):Promise<PartySocket | null> {
+    const repo = state.repo
+
+    // Use the document ID to create a partykit room
+    const networkAdapter = new PartyKitNetworkAdapter({
         host: PARTYKIT_HOST,
-        room: roomId
+        room: documentId
     })
+
+    repo.networkSubsystem.addNetworkAdapter(networkAdapter)
+
+    // Wait for the network adapter to be ready and have a socket
+    await networkAdapter.whenReady()
+
+    const party = networkAdapter.socket
+
+    if (!party) throw new Error('not socket')
 
     state.party = party
 
@@ -74,8 +81,10 @@ State.connect = function (
  * @returns The document "handle".
  */
 State.createDoc = function<T=any> (state:ReturnType<typeof State>):DocHandle<T> {
-    const { repo } = state
+    const repo = state.repo
+    // Create the document to get its ID
     const docHandle = repo.create<T>()
+
     state.document.value = docHandle
     return docHandle
 }

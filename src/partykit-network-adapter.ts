@@ -14,7 +14,7 @@ interface PartyKitNetworkAdapterOptions {
 }
 
 export class PartyKitNetworkAdapter extends NetworkAdapter {
-    #socket:PartySocket|null = null
+    socket:PartySocket|null = null
     #isReady = false
     #readyPromise:Promise<void> | null = null
     #options:PartyKitNetworkAdapterOptions
@@ -48,12 +48,12 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             }
 
             const onOpen = () => {
-                this.#socket?.removeEventListener('open', onOpen)
+                this.socket?.removeEventListener('open', onOpen)
                 resolve()
             }
 
-            if (this.#socket) {
-                this.#socket.addEventListener('open', onOpen)
+            if (this.socket) {
+                this.socket.addEventListener('open', onOpen)
             } else {
                 // If no socket exists yet, wait for connection
                 resolve()
@@ -63,26 +63,26 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         return this.#readyPromise
     }
 
-    connect (peerId:PeerId, peerMetadata?:PeerMetadata) {
+    connect (peerId:PeerId, peerMetadata?:PeerMetadata):PartySocket {
         this.peerId = peerId
         this.peerMetadata = peerMetadata
 
-        if (this.#socket) {
-            this.#socket.close()
+        if (this.socket) {
+            this.socket.close()
         }
 
-        this.#socket = new PartySocket({
+        this.socket = new PartySocket({
             host: this.#options.host!,
             party: this.#options.party!,
             room: this.#options.room
         })
 
-        this.#socket.addEventListener('open', () => {
+        this.socket.addEventListener('open', () => {
             this.#isReady = true
             console.log('PartyKit connection opened')
         })
 
-        this.#socket.addEventListener('message', (event) => {
+        this.socket.addEventListener('message', (event) => {
             try {
                 const parsed = JSON.parse(event.data)
 
@@ -111,21 +111,23 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             }
         })
 
-        this.#socket.addEventListener('close', () => {
+        this.socket.addEventListener('close', () => {
             this.#isReady = false
             console.log('PartyKit connection closed')
             this.emit('close')
         })
 
-        this.#socket.addEventListener('error', (error) => {
+        this.socket.addEventListener('error', (error) => {
             console.error('PartyKit connection error:', error)
         })
+
+        return this.socket
     }
 
     disconnect () {
-        if (this.#socket) {
-            this.#socket.close()
-            this.#socket = null
+        if (this.socket) {
+            this.socket.close()
+            this.socket = null
         }
         this.#isReady = false
         this.#readyPromise = null
@@ -134,13 +136,13 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     }
 
     send (message:Message) {
-        if (!this.#socket || !this.#isReady) {
+        if (!this.socket || !this.#isReady) {
             console.warn('Cannot send message: socket not connected')
             return
         }
 
         try {
-            this.#socket.send(JSON.stringify(message))
+            this.socket.send(JSON.stringify(message))
         } catch (error) {
             console.error('Failed to send message:', error)
         }
