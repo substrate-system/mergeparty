@@ -2,7 +2,11 @@ import type { PartySocket } from 'partysocket'
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb'
 import { PartyKitNetworkAdapter } from '../src/partykit-network-adapter.js'
 import { type Sign, sign } from '@substrate-system/signs'
-import { type DocHandle, Repo } from '@substrate-system/automerge-repo-slim'
+import {
+    type DocHandle,
+    type AnyDocumentId,
+    Repo
+} from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 const debug = Debug()
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
@@ -11,15 +15,22 @@ export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
 
 export type Status = 'connecting'|'connected'|'disconnected'
 
-export type ExampleAppState<T=any> = {
+export type AppDoc = {
+    hello:string
+}
+
+export type ExampleAppState = {
     repo:Repo;
     status:Sign<Status>;
-    document:Sign<DocHandle<T>|null>;
+    document:Sign<DocHandle<AppDoc>|null>;
     party:PartySocket|null;
 }
 
+// 4MzR8u8GQvvkx3tEdHbEatvDHhuN
+
 export function State ():ExampleAppState {
-    // Create repo without network adapter first
+    // Create repo without network adapter, so it doesn't
+    // connect automatically
     const repo = new Repo({
         storage: new IndexedDBStorageAdapter(),
     })
@@ -51,10 +62,15 @@ State.disconnect = function (state:ReturnType<typeof State>) {
     state.status.value = 'disconnected'
 }
 
+/**
+ * Use 1 partykit "room" per document.
+ *
+ * Once we connect to the room, then find the document by ID.
+ */
 State.connect = async function (
     state:ReturnType<typeof State>,
     documentId:string
-):Promise<PartySocket | null> {
+):Promise<PartySocket|null> {
     const repo = state.repo
 
     // Use the document ID to create a partykit room
@@ -65,7 +81,7 @@ State.connect = async function (
 
     repo.networkSubsystem.addNetworkAdapter(networkAdapter)
 
-    // Wait for the network adapter to be ready and have a socket
+    // Wait for the network adapter
     await networkAdapter.whenReady()
 
     const party = networkAdapter.socket
@@ -74,9 +90,21 @@ State.connect = async function (
 
     state.party = party
 
-    party.addEventListener('open', () => {
+    party.addEventListener('open', async () => {
         debug("it's open")
         state.status.value = 'connected'
+
+        if (!state.document.value) {
+            try {
+                const doc = await state.repo.find<AppDoc>(
+                    documentId as AnyDocumentId
+                )
+                debug('found the document...', doc)
+                state.document.value = doc
+            } catch (err) {
+                debug('error...', err)
+            }
+        }
     })
 
     party.addEventListener('message', ev => {
@@ -97,10 +125,10 @@ State.connect = async function (
  * @param state The state object
  * @returns The document "handle".
  */
-State.createDoc = function<T=any> (state:ReturnType<typeof State>):DocHandle<T> {
+State.createDoc = function (state:ReturnType<typeof State>):DocHandle<AppDoc> {
     const repo = state.repo
     // Create the document to get its ID
-    const docHandle = repo.create<T>()
+    const docHandle = repo.create({ hello: 'world' })
 
     state.document.value = docHandle
     return docHandle

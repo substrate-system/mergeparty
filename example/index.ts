@@ -15,19 +15,21 @@ if (import.meta.env.DEV) {
     window.state = state
 }
 
-connector?.addEventListener('submit', ev => {
+connector?.addEventListener('submit', async ev => {
     ev.preventDefault()
-    debug('submit')
+    debug('connect/disconnect')
 
     // connect or disconnect?
     const status = state.status.value
 
     if (status === 'disconnected') {
+        // connect
         const els = (ev.target as HTMLFormElement).elements
         let docId:string = els['document-id'].value
+
         // create a new document if a doc ID was not passed in
         docId = (docId || State.createDoc(state).documentId)
-        State.connect(state, docId)
+        await State.connect(state, docId)
     }
 
     if (status === 'connected') {
@@ -67,6 +69,7 @@ effect(() => {
     if (status === 'disconnected' || status === 'connecting') {
         text?.setAttribute('disabled', '')
         qs('form.textarea button')?.setAttribute('disabled', '')
+        document.getElementById('connect')!.innerText = 'Connect'
     } else {
         // is connected
         text?.removeAttribute('disabled')

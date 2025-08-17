@@ -93,7 +93,8 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
 
         this.socket.addEventListener('message', (event) => {
             try {
-                // Handle binary CBOR messages (all Automerge messages are CBOR-encoded)
+                // Handle binary CBOR messages
+                // (all Automerge messages are CBOR-encoded)
                 if (event.data instanceof ArrayBuffer) {
                     const message = decode(new Uint8Array(event.data)) as any
 
@@ -120,8 +121,9 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
                     return
                 }
 
-                // Fallback for text messages (shouldn't happen with proper CBOR encoding)
-                console.warn('Received non-binary message, this should not happen with CBOR')
+                // Fallback for text messages
+                // (shouldn't happen with proper CBOR encoding)
+                console.warn('Received non-binary message; this should not happen.')
                 const parsed = JSON.parse(event.data)
 
                 if (parsed.type === 'peer-candidate') {
