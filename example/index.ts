@@ -9,6 +9,9 @@ const debug = Debug()
 const qs = document.querySelector.bind(document)
 const state = State()
 const connector = await waitFor('.connector form')
+const connectBtn = document.getElementById('connect')
+const text = qs('textarea')
+const submitBtn = qs('form.textarea button')
 
 if (import.meta.env.DEV) {
     // @ts-expect-error dev
@@ -39,6 +42,23 @@ connector?.addEventListener('submit', async ev => {
 })
 
 /**
+ * Synchronize state - update automerge doc when textarea changes
+ */
+text?.addEventListener('input', (ev) => {
+    const doc = state.document.value
+    if (!doc) return
+
+    const textarea = ev.target as HTMLTextAreaElement
+    const newValue = textarea.value
+
+    // Update the automerge document
+    doc.change(() => {
+        // Since AppDoc is defined as string, we directly assign the value
+        return newValue
+    })
+})
+
+/**
  * Connection state change
  */
 effect(() => {
@@ -62,19 +82,16 @@ effect(() => {
         hiddenText.textContent = `WebSocket connection status: ${message}`
     }
 
-    const text = qs('textarea')
-    const submitBtn = qs('form.textarea button')
-
     // Change form state
     if (status === 'disconnected' || status === 'connecting') {
         text?.setAttribute('disabled', '')
-        qs('form.textarea button')?.setAttribute('disabled', '')
-        document.getElementById('connect')!.innerText = 'Connect'
+        submitBtn?.setAttribute('disabled', '')
+        connectBtn!.innerText = 'Connect'
     } else {
         // is connected
         text?.removeAttribute('disabled')
         submitBtn?.removeAttribute('disabled')
-        document.getElementById('connect')!.innerText = 'Disconnect'
+        connectBtn!.innerText = 'Disconnect'
     }
 })
 
@@ -93,6 +110,28 @@ effect(() => {
     const doc = state.document.value
     if (!doc) return
     qs('.connector')!.innerHTML += DocId(doc)
+})
+
+/**
+ * Update textarea when document changes (for collaborative editing)
+ */
+effect(() => {
+    const doc = state.document.value
+    if (!doc || !text) return
+
+    // Listen for document changes
+    doc.on('change', () => {
+        const currentValue = doc.docSync()
+        if (text.value !== currentValue) {
+            text.value = currentValue || ''
+        }
+    })
+
+    // Set initial value
+    const initialValue = doc.docSync()
+    if (initialValue !== undefined) {
+        text.value = initialValue
+    }
 })
 
 /**

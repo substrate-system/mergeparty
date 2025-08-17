@@ -15,9 +15,7 @@ export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
 
 export type Status = 'connecting'|'connected'|'disconnected'
 
-export type AppDoc = {
-    hello:string
-}
+export type AppDoc = string
 
 export type ExampleAppState = {
     repo:Repo;
@@ -128,7 +126,7 @@ State.connect = async function (
 State.createDoc = function (state:ReturnType<typeof State>):DocHandle<AppDoc> {
     const repo = state.repo
     // Create the document to get its ID
-    const docHandle = repo.create({ hello: 'world' })
+    const docHandle = repo.create('')
 
     state.document.value = docHandle
     return docHandle
