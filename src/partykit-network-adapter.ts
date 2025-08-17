@@ -53,8 +53,10 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
                 return
             }
 
-            const onOpen = () => {
+            const onOpen = async () => {
                 this.socket?.removeEventListener('open', onOpen)
+                // wait a bit for sync messages
+                await sleep(1000)
                 resolve()
             }
 
@@ -185,4 +187,8 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             console.error('Failed to send message:', error)
         }
     }
+}
+
+function sleep (n:number):Promise<void> {
+    return new Promise<void>(resolve => setTimeout(resolve, n))
 }

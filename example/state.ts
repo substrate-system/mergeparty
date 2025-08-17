@@ -4,7 +4,6 @@ import { PartyKitNetworkAdapter } from '../src/partykit-network-adapter.js'
 import { type Sign, sign } from '@substrate-system/signs'
 import {
     type DocHandle,
-    type AnyDocumentId,
     Repo
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
@@ -15,7 +14,9 @@ export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
 
 export type Status = 'connecting'|'connected'|'disconnected'
 
-export type AppDoc = string
+export type AppDoc = {
+    text: string
+}
 
 export type ExampleAppState = {
     repo:Repo;
@@ -71,50 +72,115 @@ State.connect = async function (
 ):Promise<PartySocket|null> {
     const repo = state.repo
 
-    // Use the document ID to create a partykit room
-    const networkAdapter = new PartyKitNetworkAdapter({
-        host: PARTYKIT_HOST,
-        room: documentId
-    })
+    try {
+        // Use the document ID to create a partykit room
+        const networkAdapter = new PartyKitNetworkAdapter({
+            host: PARTYKIT_HOST,
+            room: documentId
+        })
 
-    repo.networkSubsystem.addNetworkAdapter(networkAdapter)
+        repo.networkSubsystem.addNetworkAdapter(networkAdapter)
 
-    // Wait for the network adapter
-    await networkAdapter.whenReady()
+        debug('waiting for network adapter...')
 
-    const party = networkAdapter.socket
+        // Set status to connecting when we start waiting for connection
+        state.status.value = 'connecting'
 
-    if (!party) throw new Error('not socket')
+        // Wait for the network adapter
+        await networkAdapter.whenReady()
+        debug('network adapter ready')
 
-    state.party = party
+        const party = networkAdapter.socket
 
-    party.addEventListener('open', async () => {
-        debug("it's open")
-        state.status.value = 'connected'
+        if (!party) throw new Error('no socket available')
 
-        if (!state.document.value) {
-            try {
-                const doc = await state.repo.find<AppDoc>(
-                    documentId as AnyDocumentId
-                )
-                debug('found the document...', doc)
-                state.document.value = doc
-            } catch (err) {
-                debug('error...', err)
+        state.party = party
+
+        party.addEventListener('open', async () => {
+            debug("it's open")
+            state.status.value = 'connected'
+
+            // Wait for potential sync messages before trying to find document
+            setTimeout(async () => {
+                if (!state.document.value) {
+                    debug('Looking for document:', documentId)
+                    debug('Repo has documents:', Object.keys(repo.handles))
+
+                    // Try to find the exact document by the provided ID
+                    if (repo.handles[documentId]) {
+                        debug('Found exact document in repo handles!')
+                        const doc = repo.handles[documentId] as DocHandle<AppDoc>
+                        await doc.whenReady()
+                        debug('Document is ready, content:', doc.doc())
+                        state.document.value = doc
+                        return
+                    }
+
+                    // If we don't have the document yet, wait longer for sync
+                    debug('Document not in local handles, waiting for sync...')
+
+                    let attempts = 0
+                    const maxAttempts = 15 // Wait up to 15 seconds total
+
+                    const checkForDocument = async (): Promise<boolean> => {
+                        attempts++
+                        debug(`Sync attempt ${attempts}/${maxAttempts} for document ${documentId}`)
+                        debug('Current repo handles:', Object.keys(repo.handles))
+
+                        if (repo.handles[documentId]) {
+                            debug('Document appeared via sync!')
+                            const doc = repo.handles[documentId] as DocHandle<AppDoc>
+                            await doc.whenReady()
+                            debug('Document is ready, content:', doc.doc())
+                            state.document.value = doc
+                            return true
+                        }
+
+                        if (attempts < maxAttempts) {
+                        // Continue waiting
+                            setTimeout(checkForDocument, 1000)
+                            return false
+                        } else {
+                        // After waiting 15 seconds, assume we're the first client
+                        // and create the document that others can sync to
+                            debug('No document received via sync, creating one for others to sync to')
+                            const newDoc = repo.create({ text: '' })
+                            debug('Created document with ID:', newDoc.documentId)
+                            debug('Note: This document ID differs from requested ID, but will sync to all clients in this room')
+                            state.document.value = newDoc
+                            return true
+                        }
+                    }
+
+                    await checkForDocument()
+                }
+            }, 2000) // Wait 2 seconds for initial connection before starting sync checks
+        })
+
+        party.addEventListener('message', ev => {
+            debug('got a message', ev.data)
+            if (ev.data instanceof ArrayBuffer) {
+                debug('Message size:', ev.data.byteLength, 'bytes')
+                debug('Repo handles after message:', Object.keys(repo.handles))
             }
-        }
-    })
+        })
 
-    party.addEventListener('message', ev => {
-        debug('got a message', ev.data)
-    })
+        party.addEventListener('close', () => {
+            debug('websocket is closed')
+            state.status.value = 'disconnected'
+        })
 
-    party.addEventListener('close', () => {
-        debug('websocket is closed')
+        party.addEventListener('error', (error) => {
+            debug('websocket error:', error)
+            state.status.value = 'disconnected'
+        })
+
+        return party
+    } catch (error) {
+        debug('Connection error:', error)
         state.status.value = 'disconnected'
-    })
-
-    return party
+        return null
+    }
 }
 
 /**
@@ -126,7 +192,7 @@ State.connect = async function (
 State.createDoc = function (state:ReturnType<typeof State>):DocHandle<AppDoc> {
     const repo = state.repo
     // Create the document to get its ID
-    const docHandle = repo.create('')
+    const docHandle = repo.create({ text: '' })
 
     state.document.value = docHandle
     return docHandle

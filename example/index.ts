@@ -9,7 +9,7 @@ const debug = Debug()
 const qs = document.querySelector.bind(document)
 const state = State()
 const connector = await waitFor('.connector form')
-const connectBtn = document.getElementById('connect')
+// const connectBtn = document.getElementById('connect')
 const text = qs('textarea')
 const submitBtn = qs('form.textarea button')
 
@@ -30,8 +30,13 @@ connector?.addEventListener('submit', async ev => {
         const els = (ev.target as HTMLFormElement).elements
         let docId:string = els['document-id'].value
 
-        // create a new document if a doc ID was not passed in
-        docId = (docId || State.createDoc(state).documentId)
+        // If no document ID provided, create a new document first
+        if (!docId) {
+            const newDoc = State.createDoc(state)
+            docId = newDoc.documentId
+            debug('Created new document with ID:', docId)
+        }
+
         await State.connect(state, docId)
     }
 
@@ -45,17 +50,25 @@ connector?.addEventListener('submit', async ev => {
  * Synchronize state - update automerge doc when textarea changes
  */
 text?.addEventListener('input', (ev) => {
-    const doc = state.document.value
-    if (!doc) return
+    const data = state.document.value
+    if (!data) {
+        debug('No document available for input')
+        return
+    }
 
     const textarea = ev.target as HTMLTextAreaElement
     const newValue = textarea.value
 
+    debug('Updating document with new value:', newValue)
+
     // Update the automerge document
-    doc.change(() => {
-        // Since AppDoc is defined as string, we directly assign the value
-        return newValue
+    data.change((d) => {
+        debug('Inside change function, old value:', d.text, 'new value:', newValue)
+        d.text = newValue
     })
+
+    const afterChange = data.doc()
+    debug('Document after change:', afterChange)
 })
 
 /**
@@ -82,6 +95,8 @@ effect(() => {
         hiddenText.textContent = `WebSocket connection status: ${message}`
     }
 
+    const connectBtn = document.getElementById('connect')
+
     // Change form state
     if (status === 'disconnected' || status === 'connecting') {
         text?.setAttribute('disabled', '')
@@ -89,6 +104,7 @@ effect(() => {
         connectBtn!.innerText = 'Connect'
     } else {
         // is connected
+        debug('in here, is connected')
         text?.removeAttribute('disabled')
         submitBtn?.removeAttribute('disabled')
         connectBtn!.innerText = 'Disconnect'
@@ -116,21 +132,40 @@ effect(() => {
  * Update textarea when document changes (for collaborative editing)
  */
 effect(() => {
-    const doc = state.document.value
-    if (!doc || !text) return
+    const data = state.document.value
+    if (!data || !text) return
+
+    debug('Setting up document change listener for:', data.documentId)
 
     // Listen for document changes
-    doc.on('change', () => {
-        const currentValue = doc.docSync()
+    const handleChange = () => {
+        const doc = data.doc()
+        const currentValue = doc?.text || ''
+        debug('Document changed! New value:', currentValue)
+        debug('Current textarea value:', text.value)
         if (text.value !== currentValue) {
-            text.value = currentValue || ''
+            debug('Updating textarea from', text.value, 'to', currentValue)
+            text.value = currentValue
+        } else {
+            debug('Textarea already has the correct value')
         }
-    })
+    }
+
+    // Add event listeners to see what's happening
+    data.on('change', handleChange)
 
     // Set initial value
-    const initialValue = doc.docSync()
+    const doc = data.doc()
+    const initialValue = doc?.text || ''
+    debug('Setting initial value:', initialValue)
+    debug('Document state on setup:', doc)
     if (initialValue !== undefined) {
         text.value = initialValue
+    }
+
+    // Cleanup function
+    return () => {
+        data.off('change', handleChange)
     }
 })
 
