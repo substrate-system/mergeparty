@@ -114,14 +114,11 @@ State.connect = async function (
                             const doc = repo.handles[documentId] as DocHandle<AppDoc>
                             debug('Waiting for document to be ready...')
                             await doc.whenReady()
-                            debug('Document is ready, content:', doc.doc())
-                            debug('Setting state.document.value...')
                             state.document.value = doc
-                            debug('state.document.value set successfully')
                             return
                         }
 
-                        // If we don't have the document yet, wait longer for sync
+                        // If we don't have the document yet, wait for sync
                         debug('Document not in local handles, waiting for sync...')
 
                         let attempts = 0

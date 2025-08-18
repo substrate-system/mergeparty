@@ -30,11 +30,10 @@ connector?.addEventListener('submit', async ev => {
         const els = (ev.target as HTMLFormElement).elements
         let docId:string = els['document-id'].value
 
-        // If no document ID provided, create a new document first
+        // If no document ID provided, create one a new one
         if (!docId) {
             const newDoc = State.createDoc(state)
             docId = newDoc.documentId
-            debug('Created new document with ID:', docId)
         }
 
         await State.connect(state, docId)
@@ -63,7 +62,10 @@ text?.addEventListener('input', (ev) => {
 
     // Update the automerge document
     data.change((d) => {
-        debug('Inside change function, old value:', d.text, 'new value:', newValue)
+        debug(
+            'Inside change function, old value:', d.text,
+            'new value:', newValue
+        )
         d.text = newValue
     })
 
@@ -104,7 +106,6 @@ effect(() => {
         connectBtn!.innerText = 'Connect'
     } else {
         // is connected
-        debug('in here, is connected')
         text?.removeAttribute('disabled')
         submitBtn?.removeAttribute('disabled')
         connectBtn!.innerText = 'Disconnect'
@@ -157,8 +158,6 @@ effect(() => {
     // Set initial value
     const doc = data.doc()
     const initialValue = doc?.text || ''
-    debug('Setting initial value:', initialValue)
-    debug('Document state on setup:', doc)
     if (initialValue !== undefined) {
         text.value = initialValue
     }
