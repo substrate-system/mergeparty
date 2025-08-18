@@ -81,14 +81,13 @@ State.connect = async function (
 
         repo.networkSubsystem.addNetworkAdapter(networkAdapter)
 
-        debug('waiting for network adapter...')
-
         // Set status to connecting when we start waiting for connection
         state.status.value = 'connecting'
 
         // Wait for the network adapter
+        debug('waiting for network adapter...')
         await networkAdapter.whenReady()
-        debug('network adapter ready')
+        debug('network adapter ready!')
 
         const party = networkAdapter.socket
 
@@ -102,6 +101,7 @@ State.connect = async function (
 
             // only relevant if we don't have the doc
             if (!state.document.value) {
+                debug("Don't have the document yet... so fetch from network...")
                 // Wait for sync messages before trying to find document
                 setTimeout(async () => {
                     if (!state.document.value) {
@@ -113,6 +113,7 @@ State.connect = async function (
                             debug('Found exact document in repo handles!')
                             const doc = repo.handles[documentId] as DocHandle<AppDoc>
                             debug('Waiting for document to be ready...')
+                            debug('doc promise', doc.whenReady())
                             await doc.whenReady()
                             state.document.value = doc
                             return

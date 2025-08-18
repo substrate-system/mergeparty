@@ -9,7 +9,6 @@ const debug = Debug()
 const qs = document.querySelector.bind(document)
 const state = State()
 const connector = await waitFor('.connector form')
-// const connectBtn = document.getElementById('connect')
 const text = qs('textarea')
 const submitBtn = qs('form.textarea button')
 
@@ -130,13 +129,13 @@ effect(() => {
 })
 
 /**
- * Update textarea when document changes (for collaborative editing)
+ * Update textarea when document changes
  */
 effect(() => {
     const data = state.document.value
     if (!data || !text) return
 
-    debug('Setting up document change listener for:', data.documentId)
+    debug('Setting up document change listener for document:', data.documentId)
 
     // Listen for document changes
     const handleChange = () => {
