@@ -1,13 +1,14 @@
 import type { PartySocket } from 'partysocket'
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb'
-import { PartyKitNetworkAdapter } from '../src/partykit-network-adapter.js'
 import { type Sign, sign } from '@substrate-system/signs'
 import {
     type DocHandle,
     Repo
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
+import { PartyKitNetworkAdapter } from '../src/client/partykit-network-adapter.js'
 const debug = Debug('app:state')
+
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
     'http://localhost:1999' :
     'https://merge-party2.nichoth.partykit.dev')

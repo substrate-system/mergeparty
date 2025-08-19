@@ -66,15 +66,18 @@ export class MergeParty implements Party.Server {
   room: ${this.room.id}
   url: ${new URL(ctx.request.url).pathname}`
         )
-        
-        // Don't send any messages on connect - wait for the client to send 'join'
+
+        // Don't send any messages on connect - wait for the client to
+        // send 'join'
     }
 
     onMessage (message:string|ArrayBuffer, sender:Party.Connection) {
         try {
             // Handle binary messages (CBOR-encoded Automerge sync messages)
             if (message instanceof ArrayBuffer) {
-                console.log(`Binary message from ${sender.id} (${message.byteLength} bytes)`)
+                console.log(
+                    `Binary message from ${sender.id} (${message.byteLength} bytes)`
+                )
                 // Broadcast binary message to all other peers
                 this.room.broadcast(message, [sender.id])
                 return
@@ -109,7 +112,8 @@ export class MergeParty implements Party.Server {
                     if (targetConnection) {
                         // Re-encode as CBOR before sending
                         const encoded = encode(parsed)
-                        targetConnection.send(encoded.buffer.slice(
+                        const buf = encoded.buffer as ArrayBuffer
+                        targetConnection.send(buf.slice(
                             encoded.byteOffset,
                             encoded.byteOffset + encoded.byteLength
                         ))
@@ -119,7 +123,8 @@ export class MergeParty implements Party.Server {
                 } else {
                     // Broadcast to all other peers as CBOR
                     const encoded = encode(parsed)
-                    this.room.broadcast(encoded.buffer.slice(
+                    const buf = encoded.buffer as ArrayBuffer
+                    this.room.broadcast(buf.slice(
                         encoded.byteOffset,
                         encoded.byteOffset + encoded.byteLength
                     ), [sender.id])
@@ -129,7 +134,8 @@ export class MergeParty implements Party.Server {
 
             // Handle other message types (peer discovery, etc.)
             const encoded = encode(parsed)
-            this.room.broadcast(encoded.buffer.slice(
+            const buf = encoded.buffer as ArrayBuffer
+            this.room.broadcast(buf.slice(
                 encoded.byteOffset,
                 encoded.byteOffset + encoded.byteLength
             ), [sender.id])
@@ -147,7 +153,8 @@ export class MergeParty implements Party.Server {
         }
 
         const encoded = encode(peerDisconnectedMessage)
-        this.room.broadcast(encoded.buffer.slice(
+        const buf = encoded.buffer as ArrayBuffer
+        this.room.broadcast(buf.slice(
             encoded.byteOffset,
             encoded.byteOffset + encoded.byteLength
         ), [conn.id])
