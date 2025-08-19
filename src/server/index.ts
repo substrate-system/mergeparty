@@ -1,5 +1,8 @@
 import type * as Party from 'partykit/server'
-import { cbor } from '@substrate-system/automerge-repo-slim'
+import {
+    cbor,
+    StorageAdapterInterface
+} from '@substrate-system/automerge-repo-slim'
 
 const { encode, decode } = cbor
 
@@ -63,19 +66,8 @@ export class MergeParty implements Party.Server {
   room: ${this.room.id}
   url: ${new URL(ctx.request.url).pathname}`
         )
-
-        // Notify other peers about this new peer using CBOR encoding
-        const peerCandidateMessage = {
-            type: 'peer-candidate',
-            peerId: conn.id,
-            peerMetadata: {}
-        }
-
-        const encoded = encode(peerCandidateMessage)
-        this.room.broadcast(encoded.buffer.slice(
-            encoded.byteOffset,
-            encoded.byteOffset + encoded.byteLength
-        ), [conn.id])
+        
+        // Don't send any messages on connect - wait for the client to send 'join'
     }
 
     onMessage (message:string|ArrayBuffer, sender:Party.Connection) {

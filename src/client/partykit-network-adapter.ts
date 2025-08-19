@@ -11,7 +11,6 @@ import {
     type FromClientMessage,
     type FromServerMessage,
 } from '@automerge/automerge-repo-network-websocket'
-// import debug from 'debug'
 import PartySocket from 'partysocket'
 import Debug from '@substrate-system/debug'
 import { ProtocolV1 } from '@automerge/automerge-repo-network-websocket'
