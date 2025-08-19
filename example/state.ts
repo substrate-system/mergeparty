@@ -70,9 +70,13 @@ State.disconnect = function (state:ReturnType<typeof State>) {
  */
 State.connect = async function (
     state:ReturnType<typeof State>,
-    documentId:string
+    documentId?:string
 ):Promise<PartySocket|null> {
     const repo = state.repo
+    if (!documentId) {
+        const doc = await State.createDoc(state)
+        documentId = doc.documentId
+    }
 
     try {
         // Use the document ID to create a partykit room
@@ -101,8 +105,6 @@ State.connect = async function (
             try {
                 debug('Attempting to find document:', documentId)
                 const doc = await repo.find<AppDoc>(documentId as AnyDocumentId)
-
-                // Set the document immediately
                 state.document.value = doc
 
                 // Wait for it to be ready
@@ -110,12 +112,10 @@ State.connect = async function (
                 debug('Waiting for document to be ready...')
                 await doc.whenReady()
                 debug('Document is ready, content:', doc.doc())
-            } catch (_error) {
-                debug('Could not find document, creating new one...')
-                // If document doesn't exist, create a new one
-                const newDoc = repo.create({ text: '' })
-                state.document.value = newDoc
-                debug('Created new document:', newDoc.documentId)
+            } catch (error) {
+                const err = error as Error
+                debug('Could not find document', documentId)
+                throw err
             }
         }
 

@@ -1,6 +1,9 @@
 import type * as Party from 'partykit/server'
 import {
-    cbor
+    cbor,
+    NetworkAdapter,
+    type PeerId,
+    type PeerMetadata
 } from '@substrate-system/automerge-repo-slim'
 
 const { encode, decode } = cbor
@@ -12,11 +15,80 @@ export const CORS = {
         'Origin, X-Requested-With, Content-Type, Accept, Authorization',
 }
 
-export class MergeParty implements Party.Server {
+export class MergeParty extends NetworkAdapter implements Party.Server {
+    sockets:{ [peerId:PeerId]:WebSocket } = {}
     readonly room: Party.Room
+    #ready:boolean = false
+    #readyResolver?: () => void
+    #readyPromise: Promise<void> = new Promise<void>(resolve => {
+        this.#readyResolver = resolve
+    })
 
-    constructor (room: Party.Room) {
-        this.room = room
+    // constructor (room:Party.Room) {
+    //     super()
+    //     this.room = room
+    // }
+    constructor (
+        private server:Party.Server,
+        private keepAliveInterval = 5000
+    ) {
+        super()
+    }
+
+    #forceReady () {
+        if (!this.#ready) {
+            this.#ready = true
+            this.#readyResolver?.()
+        }
+    }
+
+    isReady ():boolean {
+        return this.#ready
+    }
+
+    whenReady () {
+        return this.#readyPromise
+    }
+
+    connect (peerId: PeerId, peerMetadata?: PeerMetadata) {
+        this.peerId = peerId
+        this.peerMetadata = peerMetadata
+
+        this.server.on('close', () => {
+            clearInterval(keepAliveId)
+            this.disconnect()
+        })
+
+        this.server.on('connection', (socket: WebSocketWithIsAlive) => {
+        // When a socket closes, or disconnects, remove it from our list
+            socket.on('close', () => {
+                this.#removeSocket(socket)
+            })
+
+            socket.on('message', message =>
+                this.receiveMessage(message as Uint8Array, socket)
+            )
+
+            // Start out "alive", and every time we get a pong, reset that state.
+            socket.isAlive = true
+            socket.on('pong', () => (socket.isAlive = true))
+
+            this.#forceReady()
+        })
+
+        const keepAliveId = setInterval(() => {
+        // Terminate connections to lost clients
+            const clients = this.server.clients as Set<WebSocketWithIsAlive>
+            clients.forEach(socket => {
+                if (socket.isAlive) {
+                    // Mark all clients as potentially dead until we hear from them
+                    socket.isAlive = false
+                    socket.ping()
+                } else {
+                    this.#terminate(socket)
+                }
+            })
+        }, this.keepAliveInterval)
     }
 
     // HTTP requests
@@ -76,7 +148,7 @@ export class MergeParty implements Party.Server {
 
     onMessage (message: string|ArrayBuffer, sender: Party.Connection) {
         try {
-            let parsed: any
+            let parsed:{ senderId, type, targetId }
 
             if (typeof message === 'string') {
                 // Handle string messages as JSON (join messages)
@@ -89,9 +161,10 @@ export class MergeParty implements Party.Server {
                     // Send peer response to the joining client
                     const peerResponse = {
                         type: 'peer',
-                        senderId: parsed.senderId,
-                        peerMetadata: parsed.peerMetadata || {},
-                        protocolVersion: 1
+                        senderId: sender.id, // Server's ID, not client's
+                        peerMetadata: {}, // Server metadata
+                        selectedProtocolVersion: '1',
+                        targetId: parsed.senderId // Client's ID
                     }
 
                     // Encode and send peer response
@@ -102,11 +175,8 @@ export class MergeParty implements Party.Server {
                         encodedResponse.byteOffset + encodedResponse.byteLength
                     ))
 
-                    // Notify existing peers about the new peer
-                    this.room.broadcast(buf.slice(
-                        encodedResponse.byteOffset,
-                        encodedResponse.byteOffset + encodedResponse.byteLength
-                    ), [sender.id])
+                    // Don't broadcast join messages to other peers - that's not part of the protocol
+                    // Each peer should establish their own connection
 
                     console.log(`Sent peer response for ${parsed.senderId}`)
                     return

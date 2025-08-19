@@ -4,9 +4,10 @@ import { State, statusMessages } from './state.js'
 import '@substrate-system/text-input'
 import Debug from '@substrate-system/debug'
 import { type DocHandle } from '@substrate-system/automerge-repo-slim'
-const debug = Debug(import.meta.env.DEV)
+const debug = Debug('app:view')
 
-localStorage.setItem('DEBUG', 'automerge-repo:websocket:*,app:state')
+localStorage.setItem('DEBUG', 'automerge-repo:websocket:*,app:*')
+localStorage.setItem('debug', 'automerge-repo:*')
 
 const qs = document.querySelector.bind(document)
 const state = State()
@@ -29,14 +30,7 @@ connector?.addEventListener('submit', async ev => {
     if (status === 'disconnected') {
         // connect
         const els = (ev.target as HTMLFormElement).elements
-        let docId:string = els['document-id'].value
-
-        // If no document ID provided, create one a new one
-        if (!docId) {
-            const newDoc = State.createDoc(state)
-            docId = newDoc.documentId
-        }
-
+        const docId:string|undefined = els['document-id'].value
         await State.connect(state, docId)
     }
 
