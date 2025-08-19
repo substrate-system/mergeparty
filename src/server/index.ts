@@ -30,6 +30,10 @@ export class MergeParty implements Party.Server {
             })
         }
 
+        if (req.method !== 'GET') {
+            return new Response(null, { status: 405, headers: CORS })
+        }
+
         const url = new URL(req.url)
         // /parties/<partyName>/<roomId>
         const base = `/parties/main/${this.room.id}`
