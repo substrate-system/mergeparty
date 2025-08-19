@@ -45,7 +45,7 @@ interface PeerMessage extends BaseMsg {
 
 const SUPPORTED_PROTOCOL_VERSION = '1'
 
-export default class Server implements Party.Server {
+export class MergeParty implements Party.Server {
     readonly room:Party.Room
     readonly serverPeerId:string
 
