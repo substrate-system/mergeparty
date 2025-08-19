@@ -6,7 +6,7 @@ import Debug from '@substrate-system/debug'
 import { type DocHandle } from '@substrate-system/automerge-repo-slim'
 const debug = Debug(import.meta.env.DEV)
 
-localStorage.setItem('DEBUG', 'automerge-repo:*')
+localStorage.setItem('DEBUG', 'automerge-repo:websocket:*,app:state')
 
 const qs = document.querySelector.bind(document)
 const state = State()

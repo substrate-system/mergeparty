@@ -2,7 +2,6 @@
 import {
     NetworkAdapter,
     type PeerId,
-    type Message,
     type PeerMetadata,
     cbor
 } from '@substrate-system/automerge-repo-slim'
@@ -12,6 +11,7 @@ import {
     type FromClientMessage,
     type FromServerMessage,
 } from '@automerge/automerge-repo-network-websocket'
+// import debug from 'debug'
 import PartySocket from 'partysocket'
 import Debug from '@substrate-system/debug'
 import { ProtocolV1 } from '@automerge/automerge-repo-network-websocket'
@@ -49,7 +49,8 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         this.#readyResolver = resolve
     })
 
-    #log:ReturnType<typeof Debug>
+    // #log:ReturnType<typeof Debug>
+    #log = Debug('automerge-repo:websocket:browser')
 
     // this adapter only connects to one remote client at a time
     remotePeerId?:PeerId
@@ -66,7 +67,7 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             party: options.party || 'main',
             room: options.room
         }
-        this.#log = Debug('automerge-repo:websocket:browser')
+        // this.#log = Debug('automerge-repo:websocket:browser')
     }
 
     isReady ():boolean {
@@ -86,9 +87,27 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
 
     onOpen = () => {
         this.#log('open')
+        this.#ready = true
+        this.#readyResolver?.()
         clearInterval(this.#retryIntervalId)
         this.#retryIntervalId = undefined
         this.join()
+    }
+
+    // When a socket closes, or disconnects, remove it from the array.
+    onClose = () => {
+        this.#log('close')
+        if (this.remotePeerId) {
+            this.emit('peer-disconnected', { peerId: this.remotePeerId })
+        }
+
+        if (this.retryInterval > 0 && !this.#retryIntervalId) {
+            // try to reconnect
+            setTimeout(() => {
+                if (!this.peerId) throw new Error('not peerId')
+                return this.connect(this.peerId, this.peerMetadata)
+            }, this.retryInterval)
+        }
     }
 
     onMessage = (event:MessageEvent) => {
@@ -170,7 +189,7 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     connect (peerId:PeerId, peerMetadata?:PeerMetadata):PartySocket {
         this.peerId = peerId
         this.peerMetadata = peerMetadata
-        this.#log('connecting')
+        this.#log('connecting...')
 
         // close the socket if it is open
         if (this.socket) {
@@ -188,73 +207,15 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
         this.socket.binaryType = 'arraybuffer'
 
         this.socket.addEventListener('open', this.onOpen)
-        // this.socket.addEventListener('open', () => {
-        //     this.#ready = true
-        //     console.log('PartyKit connection opened')
-        // })
+        this.socket.addEventListener('close', this.onClose)
+        this.socket.addEventListener('message', this.onMessage)
+        this.socket.addEventListener('error', this.onError)
 
-        this.socket.addEventListener('message', (event) => {
-            try {
-                // Handle binary CBOR messages
-                // (all Automerge messages are CBOR-encoded)
-                if (event.data instanceof ArrayBuffer) {
-                    const message = decode(new Uint8Array(event.data)) as any
-
-                    // Handle peer discovery messages from the server
-                    if (message.type === 'peer-candidate') {
-                        this.emit('peer-candidate', {
-                            peerId: message.peerId,
-                            peerMetadata: message.peerMetadata || {}
-                        })
-                        return
-                    }
-
-                    if (message.type === 'peer-disconnected') {
-                        this.emit('peer-disconnected', {
-                            peerId: message.peerId
-                        })
-                        return
-                    }
-
-                    // Handle automerge repo messages
-                    if (message.senderId && message.targetId && message.type) {
-                        this.emit('message', message as Message)
-                    }
-                    return
-                }
-
-                // Fallback for text messages
-                // (shouldn't happen with proper CBOR encoding)
-                console.warn('Received non-binary message; this should not happen.')
-                const parsed = JSON.parse(event.data)
-
-                if (parsed.type === 'peer-candidate') {
-                    this.emit('peer-candidate', {
-                        peerId: parsed.peerId,
-                        peerMetadata: parsed.peerMetadata || {}
-                    })
-                    return
-                }
-
-                if (parsed.type === 'peer-disconnected') {
-                    this.emit('peer-disconnected', {
-                        peerId: parsed.peerId
-                    })
-                }
-            } catch (error) {
-                console.error('Failed to parse message:', error)
-            }
-        })
-
-        this.socket.addEventListener('close', () => {
-            this.#ready = false
-            console.log('PartyKit connection closed')
-            this.emit('close')
-        })
-
-        this.socket.addEventListener('error', (error) => {
-            console.error('PartyKit connection error:', error)
-        })
+        // Mark this adapter as ready if we haven't received an ack in 1 second.
+        // We might hear back from the other end at some point but we shouldn't
+        // hold up marking things as unavailable for any longer
+        setTimeout(() => this.#forceReady(), 1000)
+        this.join()
 
         return this.socket
     }

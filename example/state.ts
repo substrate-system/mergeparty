@@ -7,7 +7,7 @@ import {
     Repo
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
-const debug = Debug(import.meta.env.DEV)
+const debug = Debug('app:state')
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
     'http://localhost:1999' :
     'https://merge-party2.nichoth.partykit.dev')
@@ -87,74 +87,70 @@ State.connect = async function (
         // Wait for the network adapter
         debug('waiting for network adapter...')
         await networkAdapter.whenReady()
+
         debug('network adapter ready!')
+        state.status.value = 'connected'
+
+        if (!state.document.value) {
+            debug("Don't have the document yet... so fetch from network...")
+            // Wait for sync messages before trying to find document
+            setTimeout(async () => {
+                if (!state.document.value) {
+                    debug('Looking for document:', documentId)
+                    debug('Repo has documents:', Object.keys(repo.handles))
+
+                    // Try to find the exact document by the provided ID
+                    if (repo.handles[documentId]) {
+                        debug('Found exact document in repo handles!')
+                        const doc = repo.handles[documentId] as DocHandle<AppDoc>
+                        debug('Waiting for document to be ready...')
+                        debug('doc promise', doc.whenReady())
+                        await doc.whenReady()
+                        state.document.value = doc
+                        return
+                    }
+
+                    // If we don't have the document yet, wait for sync
+                    debug('Document not in local handles, waiting for sync...')
+
+                    let attempts = 0
+                    const maxAttempts = 15  // Wait up to 15 seconds total
+
+                    const checkForDocument = async ():Promise<boolean> => {
+                        attempts++
+                        debug(`Sync attempt ${attempts}/${maxAttempts}` +
+                            ` for document ${documentId}`)
+                        debug('Current repo handles:', Object.keys(repo.handles))
+
+                        if (repo.handles[documentId]) {
+                            debug('Document appeared via sync!', documentId)
+                            const doc = repo.handles[documentId] as DocHandle<AppDoc>
+                            await doc.whenReady()
+                            debug('Document is ready, content:', doc.doc())
+                            state.document.value = doc
+                            return true
+                        }
+
+                        if (attempts < maxAttempts) {
+                            // Continue waiting
+                            setTimeout(checkForDocument, 1000)
+                            return false
+                        } else {
+                            // After waiting 15 seconds, error
+                            throw new Error('Document not found')
+                        }
+                    }
+
+                    await checkForDocument()
+                }
+            }, 2000)  // Wait 2 seconds before starting sync checks
+        }
 
         const party = networkAdapter.socket
 
         if (!party) throw new Error('no socket available')
 
         state.party = party
-
-        party.addEventListener('open', async () => {
-            debug("it's open")
-            state.status.value = 'connected'
-
-            // only relevant if we don't have the doc
-            if (!state.document.value) {
-                debug("Don't have the document yet... so fetch from network...")
-                // Wait for sync messages before trying to find document
-                setTimeout(async () => {
-                    if (!state.document.value) {
-                        debug('Looking for document:', documentId)
-                        debug('Repo has documents:', Object.keys(repo.handles))
-
-                        // Try to find the exact document by the provided ID
-                        if (repo.handles[documentId]) {
-                            debug('Found exact document in repo handles!')
-                            const doc = repo.handles[documentId] as DocHandle<AppDoc>
-                            debug('Waiting for document to be ready...')
-                            debug('doc promise', doc.whenReady())
-                            await doc.whenReady()
-                            state.document.value = doc
-                            return
-                        }
-
-                        // If we don't have the document yet, wait for sync
-                        debug('Document not in local handles, waiting for sync...')
-
-                        let attempts = 0
-                        const maxAttempts = 15  // Wait up to 15 seconds total
-
-                        const checkForDocument = async ():Promise<boolean> => {
-                            attempts++
-                            debug(`Sync attempt ${attempts}/${maxAttempts}` +
-                                ` for document ${documentId}`)
-                            debug('Current repo handles:', Object.keys(repo.handles))
-
-                            if (repo.handles[documentId]) {
-                                debug('Document appeared via sync!', documentId)
-                                const doc = repo.handles[documentId] as DocHandle<AppDoc>
-                                await doc.whenReady()
-                                debug('Document is ready, content:', doc.doc())
-                                state.document.value = doc
-                                return true
-                            }
-
-                            if (attempts < maxAttempts) {
-                                // Continue waiting
-                                setTimeout(checkForDocument, 1000)
-                                return false
-                            } else {
-                                // After waiting 15 seconds, error
-                                throw new Error('Document not found')
-                            }
-                        }
-
-                        await checkForDocument()
-                    }
-                }, 2000)  // Wait 2 seconds before starting sync checks
-            }
-        })
 
         party.addEventListener('message', ev => {
             debug('got a message', ev.data)
