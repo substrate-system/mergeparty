@@ -153,36 +153,19 @@ export class MergeParty implements Party.Server {
             }
 
             // Handle Automerge repo messages
-            if (parsed.type === 'sync' || parsed.type === 'request') {
-                console.log(`Handling ${parsed.type} message for document ${parsed.documentId}`)
-
-                // Let the repo handle the sync message
-                // The repo will automatically sync the document and generate response messages
-                // For now, we'll implement a simple relay to other connected peers
-                // TODO: Integrate with repo's sync engine
-
-                if (parsed.targetId && parsed.targetId !== `server:${this.room.id}`) {
-                    // Route to specific peer
-                    for (const [connId, peerId] of this.connectedPeers.entries()) {
-                        if (peerId === parsed.targetId) {
-                            const targetConn = this.room.getConnection(connId)
-                            if (targetConn) {
-                                const encoded = encode(parsed)
-                                const buf = encoded.buffer as ArrayBuffer
-                                targetConn.send(buf.slice(
-                                    encoded.byteOffset,
-                                    encoded.byteOffset + encoded.byteLength
-                                ))
-                            }
-                            return
-                        }
-                    }
-                } else {
-                    // Message is for the server - handle with repo
-                    // TODO: Process with automerge repo sync engine
-                    console.log('Message for server repo, processing...')
-                }
+            if (parsed.type === 'request') {
+                console.log(`Handling request for document ${parsed.documentId} from ${parsed.senderId}`)
+                await this.handleDocumentRequest(parsed, sender)
+                return
             }
+            
+            if (parsed.type === 'sync') {
+                console.log(`Handling sync message for document ${parsed.documentId} from ${parsed.senderId}`)
+                await this.handleSyncMessage(parsed, sender)
+                return
+            }
+
+            console.log('Unhandled message type:', parsed.type)
         } catch (error) {
             console.error('Error processing message:', error)
         }
