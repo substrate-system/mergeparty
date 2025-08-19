@@ -1,5 +1,5 @@
 import type * as Party from 'partykit/server'
-import { MergeParty, CORS } from '../src/index.js'
+import { MergeParty, CORS } from '../src/server/index.js'
 
 // Parties accept requests at /parties/:party/:roomId.
 // The default party in each project is called "main"

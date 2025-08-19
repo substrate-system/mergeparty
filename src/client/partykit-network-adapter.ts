@@ -7,13 +7,14 @@ import {
 } from '@substrate-system/automerge-repo-slim'
 import {
     type JoinMessage,
-    type PeerMessage,
     type FromClientMessage,
-    type FromServerMessage,
 } from '@automerge/automerge-repo-network-websocket'
 import PartySocket from 'partysocket'
 import Debug from '@substrate-system/debug'
 import { ProtocolV1 } from '@automerge/automerge-repo-network-websocket'
+
+// the /slim package in automerge
+// https://github.com/automerge/automerge-repo/blob/main/packages/automerge-repo/package.json#L38
 
 // https://stackoverflow.com/questions/45802988
 type TimeoutId = ReturnType<typeof setTimeout>
@@ -51,8 +52,8 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     // #log:ReturnType<typeof Debug>
     #log = Debug('automerge-repo:websocket:browser')
 
-    // this adapter only connects to one remote client at a time
-    remotePeerId?:PeerId
+    // Track multiple peers instead of just one
+    connectedPeers: Set<PeerId> = new Set()
 
     socket:PartySocket|null = null
     // #isReady = false
@@ -96,9 +97,11 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     // When a socket closes, or disconnects, remove it from the array.
     onClose = () => {
         this.#log('close')
-        if (this.remotePeerId) {
-            this.emit('peer-disconnected', { peerId: this.remotePeerId })
+        // Notify about all connected peers disconnecting
+        for (const peerId of this.connectedPeers) {
+            this.emit('peer-disconnected', { peerId })
         }
+        this.connectedPeers.clear()
 
         if (this.retryInterval > 0 && !this.#retryIntervalId) {
             // try to reconnect
@@ -110,7 +113,40 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     }
 
     onMessage = (event:MessageEvent) => {
-        this.receiveMessage(event.data as Uint8Array)
+        let messageBytes: Uint8Array
+
+        if (event.data instanceof ArrayBuffer) {
+            messageBytes = new Uint8Array(event.data)
+        } else if (event.data instanceof Uint8Array) {
+            messageBytes = event.data
+        } else if (typeof event.data === 'string') {
+            // Handle string messages (like legacy peer discovery)
+            try {
+                const parsed = JSON.parse(event.data)
+                if (parsed.type === 'peer-candidate') {
+                    // Legacy format - still support it
+                    this.peerCandidate(parsed.peerId, parsed.peerMetadata || {})
+                    return
+                }
+                if (parsed.type === 'peer-disconnected') {
+                    // Remove from our connected peers set
+                    this.connectedPeers.delete(parsed.peerId)
+                    this.emit('peer-disconnected', { peerId: parsed.peerId })
+                    return
+                }
+                // For other parsed messages, emit them directly
+                this.emit('message', parsed)
+                return
+            } catch (e) {
+                this.#log('error parsing string message:', e)
+                return
+            }
+        } else {
+            this.#log('unknown message type:', typeof event.data)
+            return
+        }
+
+        this.receiveMessage(messageBytes)
     }
 
     /**
@@ -123,8 +159,10 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
             | ErrorEvent  // node
     ) => {
         if ('error' in event) {
+            this.#log('error', event.error)
             // (node)
             if (event.error.code !== 'ECONNREFUSED') {
+                this.#log('error', event.error)
                 /* c8 ignore next */
                 throw event.error
             }
@@ -153,7 +191,10 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
     peerCandidate (remotePeerId:PeerId, peerMetadata:PeerMetadata) {
         if (!this.socket) throw new Error('Not socket')
         this.#forceReady()
-        this.remotePeerId = remotePeerId
+
+        // Add to our set of connected peers
+        this.connectedPeers.add(remotePeerId)
+
         this.emit('peer-candidate', {
             peerId: remotePeerId,
             peerMetadata,
@@ -162,26 +203,37 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
 
     receiveMessage (messageBytes:Uint8Array) {
         if (!this.socket) throw new Error('not socket')
-        let message:FromServerMessage
-        try {
-            message = decode(new Uint8Array(messageBytes))
-        } catch (e) {
-            this.#log('error decoding message:', e)
-            return
-        }
 
         if (messageBytes.byteLength === 0) {
             throw new Error('received a zero-length message')
         }
 
-        if (isPeerMessage(message)) {
-            const { peerMetadata } = message
-            this.#log(`peer: ${message.senderId}`)
-            this.peerCandidate(message.senderId, peerMetadata)
-        } else if (isErrorMessage(message)) {
-            this.#log(`error: ${message.message}`)
-        } else {
+        // Try to decode as CBOR first for Automerge protocol messages
+        let message: any
+        try {
+            message = decode(messageBytes)
+        } catch (e) {
+            this.#log('error decoding message as CBOR:', e)
+            // If CBOR decode fails, this might be raw binary data
+            // For now, ignore it as the protocol should use CBOR
+            return
+        }
+
+        // Handle different message types according to Automerge WebSocket protocol
+        if (message.type === 'peer') {
+            // This is a peer response from the server during handshake
+            this.#log(`received peer message from ${message.senderId}`)
+            this.peerCandidate(message.senderId, message.peerMetadata || {})
+        } else if (message.type === 'error') {
+            this.#log(`received error: ${message.message}`)
+        } else if (message.type === 'sync' || message.type === 'request' || message.type === 'ephemeral') {
+            // These are the main Automerge repo messages that need to be forwarded
             this.emit('message', message)
+        } else if (message.type === 'doc-unavailable') {
+            this.emit('message', message)
+        } else {
+            // Unknown message type, log and ignore
+            this.#log('unknown message type:', message.type)
         }
     }
 
@@ -247,22 +299,6 @@ export class PartyKitNetworkAdapter extends NetworkAdapter {
 
         const encoded = encode(message)
         this.socket.send(toArrayBuffer(encoded))
-
-        // if (!this.socket || !this.#ready) {
-        //     console.warn('Cannot send message: socket not connected')
-        //     return
-        // }
-
-        // try {
-        //     // Encode all messages as CBOR and send as binary
-        //     const encoded = encode(message)
-        //     this.socket.send(encoded.buffer.slice(
-        //         encoded.byteOffset,
-        //         encoded.byteOffset + encoded.byteLength
-        //     ))
-        // } catch (error) {
-        //     console.error('Failed to send message:', error)
-        // }
     }
 }
 
@@ -280,18 +316,6 @@ function joinMessage (
         peerMetadata,
         supportedProtocolVersions: [ProtocolV1],
     }
-}
-
-function isPeerMessage (
-    message:FromServerMessage
-):message is PeerMessage {
-    return message.type === 'peer'
-}
-
-function isErrorMessage (
-    message:FromServerMessage
-):message is ErrorMessage {
-    return message.type === 'error'
 }
 
 /**

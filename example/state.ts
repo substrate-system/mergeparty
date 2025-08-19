@@ -7,6 +7,7 @@ import {
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 import { PartyKitNetworkAdapter } from '../src/client/partykit-network-adapter.js'
+import { type AnyDocumentId } from '@automerge/automerge-repo'
 const debug = Debug('app:state')
 
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
@@ -94,57 +95,28 @@ State.connect = async function (
 
         if (!state.document.value) {
             debug("Don't have the document yet... so fetch from network...")
-            // Wait for sync messages before trying to find document
-            setTimeout(async () => {
-                if (!state.document.value) {
-                    debug('Looking for document:', documentId)
-                    debug('Repo has documents:', Object.keys(repo.handles))
 
-                    // Try to find the exact document by the provided ID
-                    if (repo.handles[documentId]) {
-                        debug('Found exact document in repo handles!')
-                        const doc = repo.handles[documentId] as DocHandle<AppDoc>
-                        debug('Waiting for document to be ready...')
-                        debug('doc promise', doc.whenReady())
-                        await doc.whenReady()
-                        state.document.value = doc
-                        return
-                    }
+            // Try to find the document using repo.find() which handles
+            // network loading
+            try {
+                debug('Attempting to find document:', documentId)
+                const doc = await repo.find<AppDoc>(documentId as AnyDocumentId)
 
-                    // If we don't have the document yet, wait for sync
-                    debug('Document not in local handles, waiting for sync...')
+                // Set the document immediately
+                state.document.value = doc
 
-                    let attempts = 0
-                    const maxAttempts = 15  // Wait up to 15 seconds total
-
-                    const checkForDocument = async ():Promise<boolean> => {
-                        attempts++
-                        debug(`Sync attempt ${attempts}/${maxAttempts}` +
-                            ` for document ${documentId}`)
-                        debug('Current repo handles:', Object.keys(repo.handles))
-
-                        if (repo.handles[documentId]) {
-                            debug('Document appeared via sync!', documentId)
-                            const doc = repo.handles[documentId] as DocHandle<AppDoc>
-                            await doc.whenReady()
-                            debug('Document is ready, content:', doc.doc())
-                            state.document.value = doc
-                            return true
-                        }
-
-                        if (attempts < maxAttempts) {
-                            // Continue waiting
-                            setTimeout(checkForDocument, 1000)
-                            return false
-                        } else {
-                            // After waiting 15 seconds, error
-                            throw new Error('Document not found')
-                        }
-                    }
-
-                    await checkForDocument()
-                }
-            }, 2000)  // Wait 2 seconds before starting sync checks
+                // Wait for it to be ready
+                // (this will trigger network sync if needed)
+                debug('Waiting for document to be ready...')
+                await doc.whenReady()
+                debug('Document is ready, content:', doc.doc())
+            } catch (_error) {
+                debug('Could not find document, creating new one...')
+                // If document doesn't exist, create a new one
+                const newDoc = repo.create({ text: '' })
+                state.document.value = newDoc
+                debug('Created new document:', newDoc.documentId)
+            }
         }
 
         const party = networkAdapter.socket
