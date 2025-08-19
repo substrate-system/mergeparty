@@ -7,7 +7,7 @@ import {
     Repo
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
-const debug = Debug()
+const debug = Debug(import.meta.env.DEV)
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
     'http://localhost:1999' :
     'https://merge-party2.nichoth.partykit.dev')

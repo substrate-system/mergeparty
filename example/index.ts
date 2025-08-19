@@ -4,7 +4,9 @@ import { State, statusMessages } from './state.js'
 import '@substrate-system/text-input'
 import Debug from '@substrate-system/debug'
 import { type DocHandle } from '@substrate-system/automerge-repo-slim'
-const debug = Debug()
+const debug = Debug(import.meta.env.DEV)
+
+localStorage.setItem('DEBUG', 'automerge-repo:*')
 
 const qs = document.querySelector.bind(document)
 const state = State()

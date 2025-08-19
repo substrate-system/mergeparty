@@ -43,6 +43,7 @@
     "@automerge/automerge-repo": "^2.2.0",
     "@automerge/automerge-repo-sync-server": "^0.2.8",
     "@substrate-system/automerge-repo-slim": "^2.3.2",
+    "@substrate-system/debug": "^0.9.6",
     "partykit": "^0.0.115",
     "partysocket": "1.1.5"
   },
@@ -52,7 +53,6 @@
     "@cloudflare/workers-types": "^4.20250813.0",
     "@substrate-system/a11y": "^0.0.13",
     "@substrate-system/css-normalize": "^0.0.13",
-    "@substrate-system/debug": "^0.9.2",
     "@substrate-system/dom": "^0.1.7",
     "@substrate-system/signs": "^0.2.2",
     "@substrate-system/tapout": "^0.0.4",
