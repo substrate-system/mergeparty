@@ -6,8 +6,8 @@ import {
     Repo
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
-import { PartyKitNetworkAdapter } from '../src/client/partykit-network-adapter.js'
 import { type AnyDocumentId } from '@automerge/automerge-repo'
+import { PartyKitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
 const debug = Debug('app:state')
 
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
@@ -45,11 +45,6 @@ export function State ():ExampleAppState {
 }
 
 State.disconnect = function (state:ReturnType<typeof State>) {
-    // Close the PartySocket if it exists
-    if (state.party) {
-        state.party.close()
-    }
-
     // Remove all network adapters from the repo
     const adapters = state.repo.networkSubsystem.adapters
     adapters.forEach(adapter => {
@@ -61,6 +56,7 @@ State.disconnect = function (state:ReturnType<typeof State>) {
 
     // Update status
     state.status.value = 'disconnected'
+    state.party = null
 }
 
 /**
@@ -119,7 +115,7 @@ State.connect = async function (
             }
         }
 
-        const party = networkAdapter.socket
+        const party = (networkAdapter as any).socket
 
         if (!party) throw new Error('no socket available')
 

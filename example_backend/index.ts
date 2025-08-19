@@ -1,5 +1,6 @@
 import type * as Party from 'partykit/server'
 import { MergeParty, CORS } from '../src/server/index.js'
+// import { Repo } from '@substrate-system/automerge-repo-slim'
 
 // Parties accept requests at /parties/:party/:roomId.
 // The default party in each project is called "main"

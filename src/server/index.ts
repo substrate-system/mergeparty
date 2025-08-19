@@ -1,10 +1,10 @@
 import type * as Party from 'partykit/server'
 import {
-    cbor,
-    NetworkAdapter,
+    Repo,
     type PeerId,
-    type PeerMetadata
+    cbor
 } from '@substrate-system/automerge-repo-slim'
+import { PartyKitStorageAdapter } from './partykit-storage.js'
 
 const { encode, decode } = cbor
 
@@ -15,84 +15,38 @@ export const CORS = {
         'Origin, X-Requested-With, Content-Type, Accept, Authorization',
 }
 
-export class MergeParty extends NetworkAdapter implements Party.Server {
-    sockets:{ [peerId:PeerId]:WebSocket } = {}
-    readonly room: Party.Room
-    #ready:boolean = false
-    #readyResolver?: () => void
-    #readyPromise: Promise<void> = new Promise<void>(resolve => {
-        this.#readyResolver = resolve
-    })
+export class MergeParty implements Party.Server {
+    readonly room:Party.Room
+    private repo:Repo
+    private connectedPeers:Map<string, PeerId> = new Map()
 
-    // constructor (room:Party.Room) {
-    //     super()
-    //     this.room = room
-    // }
-    constructor (
-        private server:Party.Server,
-        private keepAliveInterval = 5000
-    ) {
-        super()
-    }
+    constructor (room:Party.Room) {
+        this.room = room
 
-    #forceReady () {
-        if (!this.#ready) {
-            this.#ready = true
-            this.#readyResolver?.()
-        }
-    }
-
-    isReady ():boolean {
-        return this.#ready
-    }
-
-    whenReady () {
-        return this.#readyPromise
-    }
-
-    connect (peerId: PeerId, peerMetadata?: PeerMetadata) {
-        this.peerId = peerId
-        this.peerMetadata = peerMetadata
-
-        this.server.on('close', () => {
-            clearInterval(keepAliveId)
-            this.disconnect()
+        // Create the Automerge repo with PartyKit storage
+        this.repo = new Repo({
+            storage: new PartyKitStorageAdapter(room.storage),
+            // Use the room ID as the server's peer ID
+            peerId: `server:${room.id}` as PeerId,
+            // Share everything by default for the server
+            sharePolicy: async () => true
         })
 
-        this.server.on('connection', (socket: WebSocketWithIsAlive) => {
-        // When a socket closes, or disconnects, remove it from our list
-            socket.on('close', () => {
-                this.#removeSocket(socket)
-            })
+        console.log(`MergeParty repo initialized for room: ${room.id}`)
+    }
 
-            socket.on('message', message =>
-                this.receiveMessage(message as Uint8Array, socket)
-            )
+    // Get or create a document in the repo
+    getDocument (documentId: string) {
+        return this.repo.find(documentId as any)
+    }
 
-            // Start out "alive", and every time we get a pong, reset that state.
-            socket.isAlive = true
-            socket.on('pong', () => (socket.isAlive = true))
-
-            this.#forceReady()
-        })
-
-        const keepAliveId = setInterval(() => {
-        // Terminate connections to lost clients
-            const clients = this.server.clients as Set<WebSocketWithIsAlive>
-            clients.forEach(socket => {
-                if (socket.isAlive) {
-                    // Mark all clients as potentially dead until we hear from them
-                    socket.isAlive = false
-                    socket.ping()
-                } else {
-                    this.#terminate(socket)
-                }
-            })
-        }, this.keepAliveInterval)
+    // Create a new document
+    create<T> (initialData?: T) {
+        return this.repo.create(initialData)
     }
 
     // HTTP requests
-    async onRequest (req:Party.Request):Promise<Response> {
+    async onRequest (req: Party.Request): Promise<Response> {
         if (req.method === 'OPTIONS') {
             // respond to cors preflight requests
             return new Response(null, {
@@ -118,14 +72,14 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
         }
 
         if (subpath === '/') {
-            return new Response('👍 All good', { headers: CORS })
+            return new Response('👍 Automerge Repo Server', { headers: CORS })
         }
 
         if (subpath === '/health') {
             return Response.json({
                 status: 'ok',
                 room: this.room.id,
-                connectedPeers: Array.from(this.room.getConnections()).length,
+                connectedPeers: this.connectedPeers.size,
             },
             { headers: CORS })
         }
@@ -134,9 +88,8 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
     }
 
     onConnect (conn: Party.Connection, ctx: Party.ConnectionContext) {
-        // A websocket just connected!
         console.log(
-      `Connected:
+            `Connected:
   id: ${conn.id}
   room: ${this.room.id}
   url: ${new URL(ctx.request.url).pathname}`
@@ -146,9 +99,9 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
         // according to Automerge WebSocket protocol
     }
 
-    onMessage (message: string|ArrayBuffer, sender: Party.Connection) {
+    async onMessage (message: string | ArrayBuffer, sender: Party.Connection) {
         try {
-            let parsed:{ senderId, type, targetId }
+            let parsed: any
 
             if (typeof message === 'string') {
                 // Handle string messages as JSON (join messages)
@@ -158,11 +111,17 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
                 if (parsed.type === 'join') {
                     console.log(`Join request from ${parsed.senderId}`)
 
+                    // Store the peer connection
+                    this.connectedPeers.set(sender.id, parsed.senderId)
+
                     // Send peer response to the joining client
                     const peerResponse = {
                         type: 'peer',
-                        senderId: sender.id, // Server's ID, not client's
-                        peerMetadata: {}, // Server metadata
+                        senderId: `server:${this.room.id}`, // Server's ID
+                        peerMetadata: {
+                            storageId: `server:${this.room.id}`,
+                            isEphemeral: false // Server has persistent storage
+                        },
                         selectedProtocolVersion: '1',
                         targetId: parsed.senderId // Client's ID
                     }
@@ -175,28 +134,17 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
                         encodedResponse.byteOffset + encodedResponse.byteLength
                     ))
 
-                    // Don't broadcast join messages to other peers - that's not part of the protocol
-                    // Each peer should establish their own connection
-
                     console.log(`Sent peer response for ${parsed.senderId}`)
                     return
                 }
             } else if (message instanceof ArrayBuffer) {
                 // Handle binary messages (CBOR-encoded sync protocol)
-                console.log(
-                    `Binary message from ${sender.id} (${message.byteLength} bytes)`
-                )
-
                 try {
                     const msgBytes = new Uint8Array(message)
                     parsed = decode(msgBytes)
                 } catch {
-                    // If CBOR decode fails, this might be raw Automerge data
-                    // Broadcast as-is to other peers
-                    console.log(
-                        `Raw binary data from ${sender.id}, broadcasting as-is`
-                    )
-                    this.room.broadcast(message, [sender.id])
+                    // If CBOR decode fails, ignore
+                    console.log('Failed to decode CBOR message')
                     return
                 }
             } else {
@@ -204,57 +152,56 @@ export class MergeParty extends NetworkAdapter implements Party.Server {
                 return
             }
 
-            console.log(`Message from ${sender.id}:`, parsed.type || 'unknown')
+            // Handle Automerge repo messages
+            if (parsed.type === 'sync' || parsed.type === 'request') {
+                console.log(`Handling ${parsed.type} message for document ${parsed.documentId}`)
 
-            // Handle sync protocol messages - route based on targetId
-            if (parsed.targetId) {
-                // Message has a specific target
-                const targetConnection = Array.from(this.room.getConnections())
-                    .find(conn => conn.id === parsed.targetId)
+                // Let the repo handle the sync message
+                // The repo will automatically sync the document and generate response messages
+                // For now, we'll implement a simple relay to other connected peers
+                // TODO: Integrate with repo's sync engine
 
-                if (targetConnection) {
-                    // Re-encode as CBOR and send to target
-                    const encoded = encode(parsed)
-                    const buf = encoded.buffer as ArrayBuffer
-                    targetConnection.send(buf.slice(
-                        encoded.byteOffset,
-                        encoded.byteOffset + encoded.byteLength
-                    ))
+                if (parsed.targetId && parsed.targetId !== `server:${this.room.id}`) {
+                    // Route to specific peer
+                    for (const [connId, peerId] of this.connectedPeers.entries()) {
+                        if (peerId === parsed.targetId) {
+                            const targetConn = this.room.getConnection(connId)
+                            if (targetConn) {
+                                const encoded = encode(parsed)
+                                const buf = encoded.buffer as ArrayBuffer
+                                targetConn.send(buf.slice(
+                                    encoded.byteOffset,
+                                    encoded.byteOffset + encoded.byteLength
+                                ))
+                            }
+                            return
+                        }
+                    }
                 } else {
-                    console.warn(`Target peer ${parsed.targetId} not found`)
+                    // Message is for the server - handle with repo
+                    // TODO: Process with automerge repo sync engine
+                    console.log('Message for server repo, processing...')
                 }
-            } else {
-                // Broadcast to all other peers
-                const encoded = encode(parsed)
-                const buf = encoded.buffer as ArrayBuffer
-                this.room.broadcast(buf.slice(
-                    encoded.byteOffset,
-                    encoded.byteOffset + encoded.byteLength
-                ), [sender.id])
             }
         } catch (error) {
-            console.error('Error parsing message:', error)
-            // For binary messages that can't be parsed, just broadcast them
-            if (message instanceof ArrayBuffer) {
-                this.room.broadcast(message, [sender.id])
-            }
+            console.error('Error processing message:', error)
         }
     }
 
-    onClose (conn:Party.Connection) {
-        // Notify other peers about disconnection using CBOR encoding
-        const peerDisconnectedMessage = {
-            type: 'peer-disconnected',
-            peerId: conn.id
-        }
+    onClose (conn: Party.Connection) {
+        console.log(`Disconnected: ${conn.id}`)
 
-        const encoded = encode(peerDisconnectedMessage)
-        const buf = encoded.buffer as ArrayBuffer
-        this.room.broadcast(buf.slice(
-            encoded.byteOffset,
-            encoded.byteOffset + encoded.byteLength
-        ), [conn.id])
+        // Remove the peer from our tracking
+        const peerId = this.connectedPeers.get(conn.id)
+        if (peerId) {
+            this.connectedPeers.delete(conn.id)
+            console.log(`Removed peer ${peerId}`)
+        }
     }
 }
 
+// Export as default for PartyKit
+export default MergeParty
+
+// Also satisfy the Party.Worker interface
 MergeParty satisfies Party.Worker
