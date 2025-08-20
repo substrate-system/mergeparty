@@ -1,4 +1,6 @@
-export { WebSocketClientAdapter } from '@automerge/automerge-repo-network-websocket'
+export {
+    WebSocketClientAdapter
+} from '@automerge/automerge-repo-network-websocket'
 
 // import { WebSocketClientAdapter } from '@automerge/automerge-repo-network-websocket'
 

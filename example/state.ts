@@ -7,7 +7,13 @@ import {
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 import { type AnyDocumentId } from '@automerge/automerge-repo'
-import { PartyKitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
+// import { PartyKitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
+// import {
+//     WebSocketClientAdapter
+// } from '@automerge/automerge-repo-network-websocket'
+// import { PartykitWebsocketAdapter } from '../src/client/partykit-websocket-adapter.js'
+import { PartykitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
+
 const debug = Debug('app:state')
 
 export const PARTYKIT_HOST:string = (import.meta.env.DEV ?
@@ -26,8 +32,6 @@ export type ExampleAppState = {
     document:Sign<DocHandle<AppDoc>|null>;
     party:PartySocket|null;
 }
-
-// 4MzR8u8GQvvkx3tEdHbEatvDHhuN
 
 export function State ():ExampleAppState {
     // Create repo without network adapter, so it doesn't
@@ -48,7 +52,9 @@ State.disconnect = function (state:ReturnType<typeof State>) {
     // Remove all network adapters from the repo
     const adapters = state.repo.networkSubsystem.adapters
     adapters.forEach(adapter => {
-        if (adapter instanceof PartyKitNetworkAdapter) {
+        // if (adapter instanceof WebSocketClientAdapter) {
+        // if (adapter instanceof PartykitWebsocketAdapter) {
+        if (adapter instanceof PartykitNetworkAdapter) {
             adapter.disconnect()
             state.repo.networkSubsystem.removeNetworkAdapter(adapter)
         }
@@ -76,7 +82,15 @@ State.connect = async function (
 
     try {
         // Use the document ID to create a partykit room
-        const networkAdapter = new PartyKitNetworkAdapter({
+        // const networkAdapter = new PartyKitNetworkAdapter({
+        // const networkAdapter = new WebSocketClientAdapter({
+        //     host: PARTYKIT_HOST,
+        //     room: documentId
+        // })
+
+        // const networkAdapter = new WebSocketClientAdapter(PARTYKIT_HOST)
+        // const networkAdapter = new PartykitWebsocketAdapter()
+        const networkAdapter = new PartykitNetworkAdapter({
             host: PARTYKIT_HOST,
             room: documentId
         })
@@ -115,14 +129,13 @@ State.connect = async function (
             }
         }
 
-        const party = (networkAdapter as any).socket
-
+        const party = networkAdapter.socket as PartySocket
         if (!party) throw new Error('no socket available')
 
         state.party = party
 
         party.addEventListener('message', ev => {
-            debug('got a message', ev.data)
+            debug('********************************got a message***', ev.data)
             if (ev.data instanceof ArrayBuffer) {
                 debug('Message size:', ev.data.byteLength, 'bytes')
                 debug('Repo handles after message:', Object.keys(repo.handles))

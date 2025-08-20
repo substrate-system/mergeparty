@@ -13,7 +13,7 @@ interface PartyKitNetworkAdapterOptions {
  * This is just a thin wrapper around the official WebSocketClientAdapter
  * that constructs the correct PartyKit WebSocket URL.
  */
-export class PartyKitNetworkAdapter extends WebSocketClientAdapter {
+export class PartykitNetworkAdapter extends WebSocketClientAdapter {
     #options:PartyKitNetworkAdapterOptions
 
     constructor (options:PartyKitNetworkAdapterOptions) {

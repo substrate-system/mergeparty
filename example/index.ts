@@ -7,7 +7,8 @@ import { type DocHandle } from '@substrate-system/automerge-repo-slim'
 const debug = Debug('app:view')
 
 localStorage.setItem('DEBUG', 'automerge-repo:websocket:*,app:*')
-localStorage.setItem('debug', 'automerge-repo:*')
+localStorage.setItem('debug',
+    'automerge-repo:docsync,automerge-repo:network*,automerge-repo:websocket*')
 
 const qs = document.querySelector.bind(document)
 const state = State()

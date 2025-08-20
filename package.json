@@ -52,6 +52,7 @@
     "@automerge/automerge-repo-sync-server": "^0.2.8",
     "@substrate-system/automerge-repo-slim": "^2.3.2",
     "@substrate-system/debug": "^0.9.6",
+    "automerge-repo-storage-memory": "^0.0.48",
     "partykit": "^0.0.115",
     "partysocket": "1.1.5"
   },
