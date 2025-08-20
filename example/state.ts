@@ -1,6 +1,7 @@
 import type { PartySocket } from 'partysocket'
 import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb'
 import { type Sign, sign } from '@substrate-system/signs'
+import { decode } from '@substrate-system/automerge-repo-slim/helpers/cbor.js'
 import {
     type DocHandle,
     Repo
@@ -39,6 +40,8 @@ export function State ():ExampleAppState {
     const repo = new Repo({
         storage: new IndexedDBStorageAdapter(),
     })
+
+    repo.networkSubsystem?.on?.('peer', (p) => console.log('peer', p))
 
     return {
         repo,
@@ -135,10 +138,13 @@ State.connect = async function (
         state.party = party
 
         party.addEventListener('message', ev => {
-            debug('********************************got a message***', ev.data)
             if (ev.data instanceof ArrayBuffer) {
                 debug('Message size:', ev.data.byteLength, 'bytes')
                 debug('Repo handles after message:', Object.keys(repo.handles))
+                debug(
+                    '********************************got a message***',
+                    decode(new Uint8Array(ev.data))
+                )
             }
         })
 

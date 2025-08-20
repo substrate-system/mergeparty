@@ -171,76 +171,52 @@ export class MergeParty implements Party.Server {
 
         // testing
         // this.room.broadcast(raw, [conn.id])
+        console.log('**all the peers**', Array.from(this.peers.keys()))
 
         console.log('** the message aaaaaaaa', msg)
 
-        // const { documentId, targetId, senderId, data } = msg
-        const { targetId } = msg
+        const { type, documentId, targetId, senderId, data } = msg
 
         // If the message has a targetId, send only to that peer
-        if (targetId) {
-            const target = this.peers.get(targetId)
-            if (target) target.send(raw)  // relay the original raw ArrayBuffer
+        const target = this.peers.get(targetId || '')
+        if (target) {
+            target.send(raw)  // relay the original raw ArrayBuffer
             return
         }
 
-        // Otherwise, broadcast to all other peers except the sender
-        for (const [_peerId, peerConn] of this.peers.entries()) {
-            if (peerConn !== conn) {
-                peerConn.send(raw)  // relay the original raw ArrayBuffer
+        // Fan-out to all other peers in this room when
+        // targetId is 'server:<docId>'
+        if (targetId && targetId.includes('server:')) {
+            console.log('**fanning**')
+            console.log('**all the peers**', Array.from(this.peers.keys()))
+            for (const [peerId, conn] of this.peers) {
+                if (peerId === senderId) continue
+                const newMsg = {
+                    type,
+                    documentId,
+                    targetId: peerId,   // important: set explicit recipient
+                    senderId,
+                    data,               // forward the same binary payload
+                }
+                console.log('**the new message**', newMsg)
+                conn.send(toArrayBuffer(cborEncode({
+                    ...msg,
+                    targetId: peerId
+                })))
+            }
+        } else {
+            // Directed delivery (occasionally used by clients)
+            const conn = this.peers.get(targetId!)
+            if (conn) {
+                conn.send(cborEncode({
+                    type,
+                    documentId,
+                    targetId,
+                    senderId,
+                    data
+                }))
             }
         }
-
-        // // Fan-out to all other peers in this room when
-        // // targetId is 'server:<docId>'
-        // if (targetId && targetId.includes('server:')) {
-        //     console.log('**fanning**')
-        //     console.log('**all the peers**', Array.from(this.peers.keys()))
-        //     // this.room.broadcast(cborEncode(msg), [conn.id])
-        //     for (const [peerId, conn] of this.peers) {
-        //         if (peerId === senderId) continue
-        //         const newMsg = {
-        //             type: 'sync',
-        //             documentId,
-        //             targetId: peerId,   // important: set explicit recipient
-        //             senderId,
-        //             data,               // forward the same binary payload
-        //         }
-        //         console.log('**the new message**', newMsg)
-        //         // console.log('???????????????????????????????????', conn)
-        //         conn.send(cborEncode(newMsg))
-        //     }
-        // } else {
-        //     // Directed delivery (occasionally used by clients)
-        //     const conn = this.peers.get(targetId!)
-        //     if (conn) {
-        //         conn.send(cborEncode({
-        //             type: 'sync',
-        //             documentId,
-        //             targetId,
-        //             senderId,
-        //             data
-        //         }))
-        //     }
-        // }
-
-        // // If message has a targetId, send only to that peer
-        // if (msg.targetId) {
-        //     const dst = this.peers.get(msg.targetId)
-        //     if (dst) {
-        //         try {
-        //             dst.send(raw)
-        //         } catch (_err) {
-        //             const meta2 = this.byConn.get(dst)
-        //             if (meta2?.peerId) this.peers.delete(meta2.peerId)
-        //             this.byConn.delete(dst)
-        //         }
-        //     }
-        //     return
-        // }
-
-        // // Otherwise, broadcast to all other peers in the room
-        // this.room.broadcast(raw, [conn.id])
     }
 
     // Optional HTTP endpoint for health check
