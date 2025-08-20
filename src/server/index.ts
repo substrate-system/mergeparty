@@ -158,11 +158,30 @@ export class MergeParty implements Party.Server {
                 await this.handleDocumentRequest(parsed, sender)
                 return
             }
-            
+
             if (parsed.type === 'sync') {
                 console.log(`Handling sync message for document ${parsed.documentId} from ${parsed.senderId}`)
                 await this.handleSyncMessage(parsed, sender)
                 return
+            }
+
+            // Handle other message types
+            if (parsed.targetId && parsed.targetId !== `server:${this.room.id}`) {
+                // Route to specific peer
+                for (const [connId, peerId] of this.connectedPeers.entries()) {
+                    if (peerId === parsed.targetId) {
+                        const targetConn = this.room.getConnection(connId)
+                        if (targetConn) {
+                            const encoded = encode(parsed)
+                            const buf = encoded.buffer as ArrayBuffer
+                            targetConn.send(buf.slice(
+                                encoded.byteOffset,
+                                encoded.byteOffset + encoded.byteLength
+                            ))
+                        }
+                        return
+                    }
+                }
             }
 
             console.log('Unhandled message type:', parsed.type)
@@ -179,6 +198,98 @@ export class MergeParty implements Party.Server {
         if (peerId) {
             this.connectedPeers.delete(conn.id)
             console.log(`Removed peer ${peerId}`)
+        }
+    }
+
+    // Handle document request messages
+    private async handleDocumentRequest (message: any, sender: Party.Connection) {
+        const { senderId, documentId } = message
+        console.log(`Server handling request for document ${documentId} from ${senderId}`)
+
+        try {
+            // Try to find the document in our repo
+            const handle = await this.repo.find(documentId)
+
+            // Check if we have the document
+            const doc = await handle.doc()
+
+            if (doc) {
+                console.log(`Document ${documentId} found, sending to ${senderId}`)
+                // TODO: Generate proper sync message with document data
+                // For now, we'll relay to the requesting peer that we have it
+                // The client should be able to sync automatically
+            } else {
+                console.log(`Document ${documentId} not found, sending doc-unavailable to ${senderId}`)
+                // Send doc-unavailable response
+                const docUnavailableResponse = {
+                    type: 'doc-unavailable',
+                    senderId: `server:${this.room.id}`,
+                    targetId: senderId,
+                    documentId
+                }
+
+                const encoded = encode(docUnavailableResponse)
+                const buf = encoded.buffer as ArrayBuffer
+                sender.send(buf.slice(
+                    encoded.byteOffset,
+                    encoded.byteOffset + encoded.byteLength
+                ))
+            }
+        } catch (error) {
+            console.error(`Error handling document request for ${documentId}:`, error)
+
+            // Send error response
+            const errorResponse = {
+                type: 'error',
+                senderId: `server:${this.room.id}`,
+                targetId: senderId,
+                message: 'Error processing document request'
+            }
+
+            const encoded = encode(errorResponse)
+            const buf = encoded.buffer as ArrayBuffer
+            sender.send(buf.slice(
+                encoded.byteOffset,
+                encoded.byteOffset + encoded.byteLength
+            ))
+        }
+    }
+
+    // Handle sync messages
+    private async handleSyncMessage (message: any, _sender: Party.Connection) {
+        const { senderId, documentId, data } = message
+        console.log(`Server handling sync for document ${documentId} from ${senderId}`)
+
+        try {
+            // Find or create the document in our repo
+            await this.repo.find(documentId)
+
+            // TODO: Apply the sync data to our document
+            // For now, relay the sync message to other connected peers
+            for (const [connId, peerId] of this.connectedPeers.entries()) {
+                if (peerId !== senderId) {
+                    const targetConn = this.room.getConnection(connId)
+                    if (targetConn) {
+                        console.log(`Relaying sync from ${senderId} to ${peerId} for document ${documentId}`)
+                        const relayMessage = {
+                            type: 'sync',
+                            senderId: `server:${this.room.id}`,
+                            targetId: peerId,
+                            documentId,
+                            data
+                        }
+
+                        const encoded = encode(relayMessage)
+                        const buf = encoded.buffer as ArrayBuffer
+                        targetConn.send(buf.slice(
+                            encoded.byteOffset,
+                            encoded.byteOffset + encoded.byteLength
+                        ))
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error handling sync message for ${documentId}:`, error)
         }
     }
 }

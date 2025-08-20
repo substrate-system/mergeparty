@@ -84,7 +84,7 @@ export class MergeParty implements Party.Server {
             return
         }
 
-        let msg: BaseMsg
+        let msg:BaseMsg
         try {
             msg = cborDecode(new Uint8Array(raw)) as BaseMsg
         } catch (e) {
@@ -96,6 +96,7 @@ export class MergeParty implements Party.Server {
 
         // --- Handshake: first message must be `join` ---
         if (!meta.joined) {
+            console.log('******* in here **********')
             if (msg.type !== 'join') {
                 this.sendErrorAndClose(
                     conn,
@@ -103,7 +104,9 @@ export class MergeParty implements Party.Server {
                 )
                 return
             }
+            console.log('** join msg **')
             const join = msg as JoinMessage
+            console.log('** join **', JSON.stringify(join, null, 2))
             const versions = join.supportedProtocolVersions ?? ['1']
             if (!versions.includes(SUPPORTED_PROTOCOL_VERSION)) {
                 this.sendErrorAndClose(
@@ -135,32 +138,40 @@ export class MergeParty implements Party.Server {
             return
         }
 
-        // --- Post-handshake: route messages by targetId ---
-        // For a pure relay, we don't inspect message types deeply;
-        // we just forward.
-        const targetId = msg.targetId
-        if (!targetId || typeof targetId !== 'string') {
-            // Some client-originated messages might be server-addressed;
-            // ignore silently if not targetted.
-            // You can tighten this into an error if you prefer strictness.
+        console.log('** have joined because its down here ******')
+        console.log('** the message JSON **', JSON.stringify(msg, null, 2))
+
+        // --- Post-handshake: broadcast all sync-related messages ---
+        // Since PartyKit rooms are partitioned by documentId, all peers
+        // in this room are interested in the same document
+        if (msg.type === 'request') {
+            console.log(`Broadcasting document request for ${msg.documentId} from ${meta.peerId}`)
+            this.room.broadcast(toArrayBuffer(cborEncode(msg)), [conn.id])
             return
         }
 
-        const dst = this.byPeerId.get(targetId)
-        if (!dst) {
-            // Optional: you could reply with a doc-unavailable for
-            // request/sync, but as a relay we just drop.
+        // For sync messages, also broadcast to all peers in room
+        if (msg.type === 'sync') {
+            console.log(`Broadcasting sync message for ${msg.documentId} from ${meta.peerId}`)
+            this.room.broadcast(toArrayBuffer(cborEncode(msg)), [conn.id])
             return
         }
 
-        try {
-            dst.send(toArrayBuffer(cborEncode(msg)))
-        } catch (_err) {
-            // If send fails (e.g., closed), clean up mapping
-            const meta2 = this.byConn.get(dst)
-            if (meta2?.peerId) this.byPeerId.delete(meta2.peerId)
-            this.byConn.delete(dst)
+        // For other message types, check if they have a specific target
+        if (msg.targetId) {
+            const dst = this.byPeerId.get(msg.targetId)
+            if (dst) {
+                try {
+                    dst.send(toArrayBuffer(cborEncode(msg)))
+                } catch (_err) {
+                    // If send fails (e.g., closed), clean up mapping
+                    const meta2 = this.byConn.get(dst)
+                    if (meta2?.peerId) this.byPeerId.delete(meta2.peerId)
+                    this.byConn.delete(dst)
+                }
+            }
         }
+        // Ignore messages without targetId that aren't sync/request types
     }
 
     // Optional HTTP endpoint for health check
