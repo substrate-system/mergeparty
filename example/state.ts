@@ -10,7 +10,9 @@ import {
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 import { type AnyDocumentId } from '@automerge/automerge-repo'
-import { PartykitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
+import {
+    PartykitNetworkAdapter
+} from '../src/client/partykit-websocket-adapter.js'
 
 const debug = Debug('app:state')
 
@@ -80,14 +82,6 @@ State.connect = async function (
 
     try {
         // Use the document ID to create a partykit room
-        // const networkAdapter = new PartyKitNetworkAdapter({
-        // const networkAdapter = new WebSocketClientAdapter({
-        //     host: PARTYKIT_HOST,
-        //     room: documentId
-        // })
-
-        // const networkAdapter = new WebSocketClientAdapter(PARTYKIT_HOST)
-        // const networkAdapter = new PartykitWebsocketAdapter()
         const networkAdapter = new PartykitNetworkAdapter({
             host: PARTYKIT_HOST,
             room: documentId

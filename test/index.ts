@@ -1,7 +1,13 @@
 import { test } from '@substrate-system/tapzero'
-import { example } from '../src/index.js'
+import { PartykitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
 
-test('example', async t => {
-    t.ok('ok', 'should be an example')
-    example()
+const PARTYKIT_HOST = 'http://localhost:1999'
+
+test('smoke test', async t => {
+    const networkAdapter = new PartykitNetworkAdapter({
+        host: PARTYKIT_HOST,
+        room: 'abc123'
+    })
+
+    t.ok(networkAdapter, 'Should create the thing')
 })

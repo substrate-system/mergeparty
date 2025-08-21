@@ -19,15 +19,15 @@ the room name.
 <!-- toc -->
 
 - [Install](#install)
-- [API](#api)
+- [Use](#use)
+  * [Backend](#backend)
+  * [Browser Client](#browser-client)
+- [Modules](#modules)
   * [ESM](#esm)
   * [Common JS](#common-js)
-- [Use](#use)
-  * [JS](#js)
 - [Develop](#develop)
   * [start a localhost server](#start-a-localhost-server)
   * [start partykit](#start-partykit)
-  * [RAM](#ram)
 
 <!-- tocstop -->
 
@@ -37,21 +37,6 @@ the room name.
 
 ```sh
 npm i -S @substrate-system/mergeparty
-```
-
-## Modules
-
-This exposes ESM and common JS via
-[package.json `exports` field](https://nodejs.org/api/packages.html#exports).
-
-### ESM
-```js
-import { MergeParty } from '@substrate-system/mergeparty'
-```
-
-### Common JS
-```js
-require('@substrate-system/mergeparty')
 ```
 
 ## Use
@@ -105,6 +90,26 @@ Response:
 }
 ```
 
+### Browser Client
+
+See [./example/](./example/) for the browser version.
+
+## Modules
+
+This exposes ESM and common JS via
+[package.json `exports` field](https://nodejs.org/api/packages.html#exports).
+
+### ESM
+```js
+import { MergeParty } from '@substrate-system/mergeparty'
+```
+
+### Common JS
+```js
+require('@substrate-system/mergeparty')
+```
+
+-----------------
 
 ## Develop
 

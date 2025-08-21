@@ -1,6 +1,8 @@
 import {
     WebSocketClientAdapter
 } from '@automerge/automerge-repo-network-websocket'
+import Debug from '@substrate-system/debug'
+const debug = Debug('mergeparty:network')
 
 interface PartyKitNetworkAdapterOptions {
     host?:string
@@ -27,7 +29,7 @@ export class PartykitNetworkAdapter extends WebSocketClientAdapter {
         const cleanHost = host.replace(/^https?:\/\//, '')
         const url = `${protocol}${cleanHost}/parties/${party}/${room}`
 
-        console.log('Connecting to PartyKit server:', url)
+        debug('Connecting to PartyKit server:', url)
 
         // Call the parent constructor with the constructed URL
         super(url)
