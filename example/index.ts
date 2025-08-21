@@ -1,13 +1,14 @@
 import { waitFor } from '@substrate-system/dom'
 import { effect } from '@substrate-system/signs'
 import { State, statusMessages } from './state.js'
-import '@substrate-system/text-input'
+import '@substrate-system/text-input'  // pairs with HTML
 import Debug from '@substrate-system/debug'
 import { type DocHandle } from '@substrate-system/automerge-repo-slim'
 const debug = Debug('app:view')
 
+// application debug
 localStorage.setItem('DEBUG', 'automerge-repo:websocket:*,app:*')
-localStorage.setItem('debug',
+localStorage.setItem('debug',  // automerge debug
     'automerge-repo:docsync,automerge-repo:network*,automerge-repo:websocket*')
 
 const qs = document.querySelector.bind(document)
