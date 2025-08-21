@@ -11,20 +11,7 @@ export default class ExampleServer extends MergeParty {
      */
     static async onBeforeConnect (request:Party.Request, _lobby:Party.Lobby) {
         try {
-            // get _pk from query string (PartyKit's internal parameter)
-            // const url = new URL(request.url)
-
-            // const pk = url.searchParams.get('_pk') ?? ''
-            // if (!pk) {
-            //     return new Response('Missing _pk parameter', {
-            //         status: 401,
-            //         headers: CORS
-            //     })
-            // }
-
-            // this is not real authorization
-            // we trust everyone with a _pk
-            // console.log('**before connect**', pk)
+            // do some authorization here
 
             // forward the request to `onConnect`
             return request

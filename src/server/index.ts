@@ -199,10 +199,18 @@ export class MergeParty implements Party.Server {
 
     // Optional HTTP endpoint for health check
     async onRequest (req:Party.Request) {
-        if (new URL(req.url).pathname.endsWith('/health')) {
-            return new Response('ok', { status: 200 })
+        const url = new URL(req.url)
+        console.log('**url path**', url.pathname)
+
+        if (new URL(req.url).pathname.includes('/health')) {
+            return Response.json({
+                status: 'ok',
+                room: this.room.id,
+                connectedPeers: Array.from(this.room.getConnections()).length
+            }, { status: 200, headers: CORS })
         }
-        return new Response('Automerge relay running', { status: 200 })
+
+        return new Response('👍 All good', { status: 200, headers: CORS })
     }
 
     // ---- helpers ----
