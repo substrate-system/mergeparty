@@ -6,4 +6,5 @@ dist
 .env
 public
 .partykit
+docs
 
