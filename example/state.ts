@@ -1,5 +1,7 @@
 import type { PartySocket } from 'partysocket'
-import { IndexedDBStorageAdapter } from '@automerge/automerge-repo-storage-indexeddb'
+import {
+    IndexedDBStorageAdapter
+} from '@automerge/automerge-repo-storage-indexeddb'
 import { type Sign, sign } from '@substrate-system/signs'
 import { decode } from '@substrate-system/automerge-repo-slim/helpers/cbor.js'
 import {
@@ -8,11 +10,6 @@ import {
 } from '@substrate-system/automerge-repo-slim'
 import Debug from '@substrate-system/debug'
 import { type AnyDocumentId } from '@automerge/automerge-repo'
-// import { PartyKitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
-// import {
-//     WebSocketClientAdapter
-// } from '@automerge/automerge-repo-network-websocket'
-// import { PartykitWebsocketAdapter } from '../src/client/partykit-websocket-adapter.js'
 import { PartykitNetworkAdapter } from '../src/client/partykit-websocket-adapter.js'
 
 const debug = Debug('app:state')
@@ -55,8 +52,6 @@ State.disconnect = function (state:ReturnType<typeof State>) {
     // Remove all network adapters from the repo
     const adapters = state.repo.networkSubsystem.adapters
     adapters.forEach(adapter => {
-        // if (adapter instanceof WebSocketClientAdapter) {
-        // if (adapter instanceof PartykitWebsocketAdapter) {
         if (adapter instanceof PartykitNetworkAdapter) {
             adapter.disconnect()
             state.repo.networkSubsystem.removeNetworkAdapter(adapter)
@@ -141,10 +136,7 @@ State.connect = async function (
             if (ev.data instanceof ArrayBuffer) {
                 debug('Message size:', ev.data.byteLength, 'bytes')
                 debug('Repo handles after message:', Object.keys(repo.handles))
-                debug(
-                    '********************************got a message***',
-                    decode(new Uint8Array(ev.data))
-                )
+                debug('got a message', decode(new Uint8Array(ev.data)))
             }
         })
 

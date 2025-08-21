@@ -1,12 +1,10 @@
-import type * as Party from 'partykit/server'
-import {
-    Repo,
-    type PeerId,
-    cbor
-} from '@substrate-system/automerge-repo-slim'
-import { PartyKitStorageAdapter } from './partykit-storage.js'
+// Pure relay for Automerge-Repo WebSocket protocol (CBOR frames)
+// - No storage; just routes messages between peers in the same room
+// - Handshake: expect `join`, reply with `peer`
+// - Messages: forward anything with a `targetId` to the mapped peer
 
-const { encode, decode } = cbor
+import type * as Party from 'partykit/server'
+import { encode as cborEncode, decode as cborDecode } from 'cborg'
 
 export const CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -15,287 +13,222 @@ export const CORS = {
         'Origin, X-Requested-With, Content-Type, Accept, Authorization',
 }
 
+// Message shapes we care about (minimal). We keep these loose to avoid
+// version pinning.
+// If you import exact types from
+// `@automerge/automerge-repo-network-websocket/dist/messages`,
+// you can replace these with those.
+interface BaseMsg {
+    type:'join'|'peer'|'request'|'sync';
+    senderId?:string;
+    targetId?:string;
+    // additional fields vary by message type
+    [k: string]:unknown;
+}
+
+// Join/Peer specifics
+interface JoinMessage extends BaseMsg {
+    type:'join';
+    senderId:string;
+    supportedProtocolVersions?:string[];
+    peerMetadata?:Record<string, unknown>;
+}
+interface PeerMessage extends BaseMsg {
+    type:'peer';
+    senderId:string; // server id
+    targetId:string; // the client's id
+    selectedProtocolVersion:string;
+    peerMetadata?:Record<string, unknown>;
+}
+
+const SUPPORTED_PROTOCOL_VERSION = '1'
+
 export class MergeParty implements Party.Server {
     readonly room:Party.Room
-    private repo:Repo
-    private connectedPeers:Map<string, PeerId> = new Map()
+    readonly serverPeerId:string
+
+    private peers = new Map<string, Party.Connection>()  // peerId -> connection
+    // Connection -> meta { peerId?: string, joined: boolean }
+    private byConn = new Map<Party.Connection, {
+        peerId?:string;
+        joined:boolean
+    }>()
 
     constructor (room:Party.Room) {
         this.room = room
-
-        // Create the Automerge repo with PartyKit storage
-        this.repo = new Repo({
-            storage: new PartyKitStorageAdapter(room.storage),
-            // Use the room ID as the server's peer ID
-            peerId: `server:${room.id}` as PeerId,
-            // Share everything by default for the server
-            sharePolicy: async () => true
-        })
-
-        console.log(`MergeParty repo initialized for room: ${room.id}`)
+        // Use a deterministic server peer id per room so clients can address
+        // the server if they want
+        this.serverPeerId = `server:${room.id}`
     }
 
-    // Get or create a document in the repo
-    getDocument (documentId: string) {
-        return this.repo.find(documentId as any)
+    // ---- WebSocket lifecycle ----
+    onConnect (conn:Party.Connection) {
+        this.byConn.set(conn, { joined: false })
     }
 
-    // Create a new document
-    create<T> (initialData?: T) {
-        return this.repo.create(initialData)
+    onClose (conn:Party.Connection) {
+        const meta = this.byConn.get(conn)
+        if (meta?.peerId) this.peers.delete(meta.peerId)
+        this.byConn.delete(conn)
     }
 
-    // HTTP requests
-    async onRequest (req: Party.Request): Promise<Response> {
-        if (req.method === 'OPTIONS') {
-            // respond to cors preflight requests
-            return new Response(null, {
-                status: 200,
-                headers: CORS
-            })
+    // All Automerge-Repo messages must be binary (CBOR). If a string arrives,
+    // treat as error. Only decode for handshake, otherwise relay raw.
+    async onMessage (raw:ArrayBuffer|string, conn:Party.Connection) {
+        if (typeof raw === 'string') {
+            this.sendErrorAndClose(conn, 'Expected binary CBOR frame, got string')
+            return
         }
 
-        if (req.method !== 'GET') {
-            return new Response(null, { status: 405, headers: CORS })
-        }
+        const meta = this.byConn.get(conn) ?? { joined: false }
 
-        const url = new URL(req.url)
-        // /parties/<partyName>/<roomId>
-        const base = `/parties/main/${this.room.id}`
+        // --- Handshake: first message must be `join` ---
+        if (!meta.joined) {
+            console.log('*** not joined ***', meta)
+            let msg:BaseMsg
+            try {
+                msg = cborDecode(new Uint8Array(raw)) as BaseMsg
+            } catch (e) {
+                return this.sendErrorAndClose(
+                    conn,
+                    `CBOR decode failed: ${(e as Error).message}`
+                )
+            }
 
-        // Derive subpath inside this party ("/", "/health", etc.)
-        let subpath = '/'
-        if (url.pathname === base || url.pathname === `${base}/`) {
-            subpath = '/'
-        } else if (url.pathname.startsWith(`${base}/`)) {
-            subpath = url.pathname.slice(base.length) // e.g. "/health"
-        }
-
-        if (subpath === '/') {
-            return new Response('👍 Automerge Repo Server', { headers: CORS })
-        }
-
-        if (subpath === '/health') {
-            return Response.json({
-                status: 'ok',
-                room: this.room.id,
-                connectedPeers: this.connectedPeers.size,
-            },
-            { headers: CORS })
-        }
-
-        return new Response('Not Found', { status: 404 })
-    }
-
-    onConnect (conn: Party.Connection, ctx: Party.ConnectionContext) {
-        console.log(
-            `Connected:
-  id: ${conn.id}
-  room: ${this.room.id}
-  url: ${new URL(ctx.request.url).pathname}`
-        )
-
-        // Don't send any messages on connect - wait for join message from client
-        // according to Automerge WebSocket protocol
-    }
-
-    async onMessage (message: string | ArrayBuffer, sender: Party.Connection) {
-        try {
-            let parsed: any
-
-            if (typeof message === 'string') {
-                // Handle string messages as JSON (join messages)
-                parsed = JSON.parse(message)
-
-                // Handle join message according to Automerge WebSocket protocol
-                if (parsed.type === 'join') {
-                    console.log(`Join request from ${parsed.senderId}`)
-
-                    // Store the peer connection
-                    this.connectedPeers.set(sender.id, parsed.senderId)
-
-                    // Send peer response to the joining client
-                    const peerResponse = {
-                        type: 'peer',
-                        senderId: `server:${this.room.id}`, // Server's ID
-                        peerMetadata: {
-                            storageId: `server:${this.room.id}`,
-                            isEphemeral: false // Server has persistent storage
-                        },
-                        selectedProtocolVersion: '1',
-                        targetId: parsed.senderId // Client's ID
-                    }
-
-                    // Encode and send peer response
-                    const encodedResponse = encode(peerResponse)
-                    const buf = encodedResponse.buffer as ArrayBuffer
-                    sender.send(buf.slice(
-                        encodedResponse.byteOffset,
-                        encodedResponse.byteOffset + encodedResponse.byteLength
-                    ))
-
-                    console.log(`Sent peer response for ${parsed.senderId}`)
-                    return
-                }
-            } else if (message instanceof ArrayBuffer) {
-                // Handle binary messages (CBOR-encoded sync protocol)
-                try {
-                    const msgBytes = new Uint8Array(message)
-                    parsed = decode(msgBytes)
-                } catch {
-                    // If CBOR decode fails, ignore
-                    console.log('Failed to decode CBOR message')
-                    return
-                }
-            } else {
-                console.warn('Unknown message type:', typeof message)
+            if (msg.type !== 'join') {
+                this.sendErrorAndClose(
+                    conn,
+                    "Protocol error: expected 'join' as first message"
+                )
                 return
             }
 
-            // Handle Automerge repo messages
-            if (parsed.type === 'request') {
-                console.log(`Handling request for document ${parsed.documentId} from ${parsed.senderId}`)
-                await this.handleDocumentRequest(parsed, sender)
+            const join = msg as JoinMessage
+            const versions = join.supportedProtocolVersions ?? ['1']
+            if (!versions.includes(SUPPORTED_PROTOCOL_VERSION)) {
+                this.sendErrorAndClose(
+                    conn,
+                    'Unsupported protocol version. ' +
+                        `Server supports ${SUPPORTED_PROTOCOL_VERSION}`
+                )
                 return
             }
 
-            if (parsed.type === 'sync') {
-                console.log(`Handling sync message for document ${parsed.documentId} from ${parsed.senderId}`)
-                await this.handleSyncMessage(parsed, sender)
+            if (!join.senderId || typeof join.senderId !== 'string') {
+                this.sendErrorAndClose(conn, 'join.senderId missing or invalid')
                 return
             }
 
-            // Handle other message types
-            if (parsed.targetId && parsed.targetId !== `server:${this.room.id}`) {
-                // Route to specific peer
-                for (const [connId, peerId] of this.connectedPeers.entries()) {
-                    if (peerId === parsed.targetId) {
-                        const targetConn = this.room.getConnection(connId)
-                        if (targetConn) {
-                            const encoded = encode(parsed)
-                            const buf = encoded.buffer as ArrayBuffer
-                            targetConn.send(buf.slice(
-                                encoded.byteOffset,
-                                encoded.byteOffset + encoded.byteLength
-                            ))
-                        }
-                        return
-                    }
+            // map peerID to connection
+            this.peers.set(join.senderId, conn)
+            this.byConn.set(conn, { joined: true, peerId: join.senderId })
+
+            // Helper to send a "peer" announcement: A is being announced to B
+            const announce = (announcedPeerId:string, toClientId:string) => {
+                const msg:PeerMessage = {
+                    type: 'peer',
+                    senderId: announcedPeerId,  // the peer being announced
+                    targetId: toClientId,  // the client who should learn about it
+                    selectedProtocolVersion: SUPPORTED_PROTOCOL_VERSION,
+                    peerMetadata: {},
                 }
+                const toConn = this.peers.get(toClientId)
+                if (toConn) toConn.send(toArrayBuffer(cborEncode(msg)))
             }
 
-            console.log('Unhandled message type:', parsed.type)
-        } catch (error) {
-            console.error('Error processing message:', error)
+            // 1) Tell the new client about all existing peers
+            for (const existingId of this.peers.keys()) {
+                if (existingId === join.senderId) continue
+                announce(existingId, join.senderId)
+            }
+
+            // 2) Tell all existing peers about the new client
+            for (const [existingId, _existingConn] of this.peers) {
+                if (existingId === join.senderId) continue
+                announce(join.senderId, existingId)
+            }
+
+            return
         }
-    }
 
-    onClose (conn: Party.Connection) {
-        console.log(`Disconnected: ${conn.id}`)
+        // --- Post-handshake: relay all messages as raw binary ---
 
-        // Remove the peer from our tracking
-        const peerId = this.connectedPeers.get(conn.id)
-        if (peerId) {
-            this.connectedPeers.delete(conn.id)
-            console.log(`Removed peer ${peerId}`)
-        }
-    }
-
-    // Handle document request messages
-    private async handleDocumentRequest (message: any, sender: Party.Connection) {
-        const { senderId, documentId } = message
-        console.log(`Server handling request for document ${documentId} from ${senderId}`)
-
+        // Decode only if you need to inspect routing (targetId),
+        // otherwise broadcast
+        let msg:BaseMsg|undefined
         try {
-            // Try to find the document in our repo
-            const handle = await this.repo.find(documentId)
+            msg = cborDecode(new Uint8Array(raw)) as BaseMsg
+        } catch (_err) {
+            // If decode fails, just drop the message (should not happen)
+            return
+        }
 
-            // Check if we have the document
-            const doc = await handle.doc()
+        const { type, documentId, targetId, senderId, data } = msg
 
-            if (doc) {
-                console.log(`Document ${documentId} found, sending to ${senderId}`)
-                // TODO: Generate proper sync message with document data
-                // For now, we'll relay to the requesting peer that we have it
-                // The client should be able to sync automatically
-            } else {
-                console.log(`Document ${documentId} not found, sending doc-unavailable to ${senderId}`)
-                // Send doc-unavailable response
-                const docUnavailableResponse = {
-                    type: 'doc-unavailable',
-                    senderId: `server:${this.room.id}`,
-                    targetId: senderId,
-                    documentId
-                }
+        // If the message has a targetId, send only to that peer
+        const target = this.peers.get(targetId || '')
+        if (target) {
+            target.send(raw)  // relay the original raw ArrayBuffer
+            return
+        }
 
-                const encoded = encode(docUnavailableResponse)
-                const buf = encoded.buffer as ArrayBuffer
-                sender.send(buf.slice(
-                    encoded.byteOffset,
-                    encoded.byteOffset + encoded.byteLength
-                ))
+        // Fan-out to all other peers in this room when
+        // targetId is 'server:<docId>'
+        if (targetId && targetId.includes('server:')) {
+            for (const [peerId, conn] of this.peers) {
+                if (peerId === senderId) continue
+                conn.send(toArrayBuffer(cborEncode({
+                    ...msg,
+                    targetId: peerId   // important: set explicit recipient
+                })))
             }
-        } catch (error) {
-            console.error(`Error handling document request for ${documentId}:`, error)
-
-            // Send error response
-            const errorResponse = {
-                type: 'error',
-                senderId: `server:${this.room.id}`,
-                targetId: senderId,
-                message: 'Error processing document request'
+        } else {
+            // Directed delivery (occasionally used by clients)
+            const conn = this.peers.get(targetId!)
+            if (conn) {
+                conn.send(cborEncode({
+                    type,
+                    documentId,
+                    targetId,
+                    senderId,
+                    data
+                }))
             }
-
-            const encoded = encode(errorResponse)
-            const buf = encoded.buffer as ArrayBuffer
-            sender.send(buf.slice(
-                encoded.byteOffset,
-                encoded.byteOffset + encoded.byteLength
-            ))
         }
     }
 
-    // Handle sync messages
-    private async handleSyncMessage (message: any, _sender: Party.Connection) {
-        const { senderId, documentId, data } = message
-        console.log(`Server handling sync for document ${documentId} from ${senderId}`)
+    // Optional HTTP endpoint for health check
+    async onRequest (req:Party.Request) {
+        if (new URL(req.url).pathname.endsWith('/health')) {
+            return new Response('ok', { status: 200 })
+        }
+        return new Response('Automerge relay running', { status: 200 })
+    }
 
+    // ---- helpers ----
+    private sendErrorAndClose (conn:Party.Connection, message:string):void {
+        const errorMsg = { type: 'error', message }
         try {
-            // Find or create the document in our repo
-            await this.repo.find(documentId)
-
-            // TODO: Apply the sync data to our document
-            // For now, relay the sync message to other connected peers
-            for (const [connId, peerId] of this.connectedPeers.entries()) {
-                if (peerId !== senderId) {
-                    const targetConn = this.room.getConnection(connId)
-                    if (targetConn) {
-                        console.log(`Relaying sync from ${senderId} to ${peerId} for document ${documentId}`)
-                        const relayMessage = {
-                            type: 'sync',
-                            senderId: `server:${this.room.id}`,
-                            targetId: peerId,
-                            documentId,
-                            data
-                        }
-
-                        const encoded = encode(relayMessage)
-                        const buf = encoded.buffer as ArrayBuffer
-                        targetConn.send(buf.slice(
-                            encoded.byteOffset,
-                            encoded.byteOffset + encoded.byteLength
-                        ))
-                    }
-                }
-            }
-        } catch (error) {
-            console.error(`Error handling sync message for ${documentId}:`, error)
+            conn.send(toArrayBuffer(cborEncode(errorMsg)))
+        } finally {
+            conn.close()
         }
     }
 }
 
-// Export as default for PartyKit
-export default MergeParty
+// Usage notes:
+// * Clients connect with Repo configured for WebSocket network adapter
+//    pointing to your Party URL:
+//    ws(s)://<your-domain>/parties/<projectName>/<roomId>
+// * Each room gives you isolation: peers in the same room can address each
+//    other by `peerId`.
+// * This server does NOT persist or synthesize Automerge sync messages—it only
+//    forwards CBOR frames.
 
-// Also satisfy the Party.Worker interface
-MergeParty satisfies Party.Worker
+// Helper: ensure we send ArrayBuffer (PartyKit accepts ArrayBuffer | string)
+function toArrayBuffer (u8:Uint8Array):ArrayBuffer {
+    if (u8.byteOffset === 0 && u8.byteLength === u8.buffer.byteLength) {
+        return u8.buffer as ArrayBuffer
+    }
+    return u8.slice().buffer
+}

@@ -8,8 +8,8 @@
   ],
   "exports": {
     "./client": {
-      "import": "./dist/client/partykit-network-adapter.js",
-      "require": "./dist/client/partykit-network-adapter.cjs"
+      "import": "./dist/client/partykit-websocket-adapter.js",
+      "require": "./dist/client/partykit-websocket-adapter.cjs"
     },
     "./server": {
       "import": "./dist/server/index.js",
