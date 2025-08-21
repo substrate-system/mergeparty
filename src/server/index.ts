@@ -13,8 +13,7 @@ export const CORS = {
         'Origin, X-Requested-With, Content-Type, Accept, Authorization',
 }
 
-// Message shapes we care about (minimal). We keep these loose to avoid
-// version pinning.
+// Message shapes we care about.
 // If you import exact types from
 // `@automerge/automerge-repo-network-websocket/dist/messages`,
 // you can replace these with those.

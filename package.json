@@ -1,11 +1,8 @@
 {
-  "private": true,
-  "type": "module",
+  "name": "@substrate-system/mergeparty",
   "version": "0.0.0",
-  "main": "dist/index.js",
-  "files": [
-    "./dist/*"
-  ],
+  "description": "Automerge + Partykit",
+  "type": "module",
   "exports": {
     "./client": {
       "import": "./dist/client/partykit-websocket-adapter.js",
@@ -30,6 +27,15 @@
       ]
     }
   },
+  "main": "dist/index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "example",
+    "test": "test"
+  },
+  "files": [
+    "./dist/*"
+  ],
   "scripts": {
     "lint": "eslint \"./**/*.{ts,js}\"",
     "test": "npm run build && esbuild ./test/index.ts --bundle | tapout",
@@ -49,6 +55,7 @@
   },
   "dependencies": {
     "@automerge/automerge-repo": "^2.2.0",
+    "@automerge/automerge-repo-network-websocket": "^2.2.0",
     "@automerge/automerge-repo-sync-server": "^0.2.8",
     "@substrate-system/automerge-repo-slim": "^2.3.2",
     "@substrate-system/debug": "^0.9.6",
@@ -57,7 +64,6 @@
     "partysocket": "1.1.5"
   },
   "devDependencies": {
-    "@automerge/automerge-repo-network-websocket": "^2.2.0",
     "@automerge/automerge-repo-storage-indexeddb": "^2.2.0",
     "@cloudflare/workers-types": "^4.20250813.0",
     "@substrate-system/a11y": "^0.0.13",
@@ -83,6 +89,20 @@
     "vite": "^7.0.6",
     "vite-plugin-wasm": "^3.5.0"
   },
-  "author": "nichoth <nichoth@nichoth.com> (https://nichoth.com)",
-  "license": "SEE LICENSE IN LICENSE"
+  "keywords": [
+    "automerge",
+    "crdt",
+    "websocket",
+    "partykit"
+  ],
+  "homepage": "https://github.com/substrate-system/mergeparty",
+  "bugs": {
+    "url": "https://github.com/substrate-system/mergeparty/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/substrate-system/mergeparty.git"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "nichoth <nichoth@nichoth.com> (https://nichoth.com)"
 }
