@@ -28,14 +28,11 @@ interface BaseMsg {
 // Join/Peer specifics
 interface JoinMessage extends BaseMsg {
     type:'join';
-    senderId:string;
     supportedProtocolVersions?:string[];
     peerMetadata?:Record<string, unknown>;
 }
 interface PeerMessage extends BaseMsg {
     type:'peer';
-    senderId:string; // server id
-    targetId:string; // the client's id
     selectedProtocolVersion:string;
     peerMetadata?:Record<string, unknown>;
 }
@@ -75,7 +72,8 @@ export class MergeParty implements Party.Server {
     // treat as error. Only decode for handshake, otherwise relay raw.
     async onMessage (raw:ArrayBuffer|string, conn:Party.Connection) {
         if (typeof raw === 'string') {
-            this.sendErrorAndClose(conn, 'Expected binary CBOR frame, got string')
+            this.sendErrorAndClose(conn,
+                'Expected binary CBOR frame, got string')
             return
         }
 
@@ -83,7 +81,6 @@ export class MergeParty implements Party.Server {
 
         // --- Handshake: first message must be `join` ---
         if (!meta.joined) {
-            console.log('*** not joined ***', meta)
             let msg:BaseMsg
             try {
                 msg = cborDecode(new Uint8Array(raw)) as BaseMsg
@@ -95,56 +92,40 @@ export class MergeParty implements Party.Server {
             }
 
             if (msg.type !== 'join') {
-                this.sendErrorAndClose(
-                    conn,
+                return this.sendErrorAndClose(conn,
                     "Protocol error: expected 'join' as first message"
                 )
-                return
             }
 
             const join = msg as JoinMessage
             const versions = join.supportedProtocolVersions ?? ['1']
             if (!versions.includes(SUPPORTED_PROTOCOL_VERSION)) {
-                this.sendErrorAndClose(
-                    conn,
+                return this.sendErrorAndClose(conn,
                     'Unsupported protocol version. ' +
-                        `Server supports ${SUPPORTED_PROTOCOL_VERSION}`
-                )
-                return
+                        `Server supports ${SUPPORTED_PROTOCOL_VERSION}`)
             }
 
             if (!join.senderId || typeof join.senderId !== 'string') {
-                this.sendErrorAndClose(conn, 'join.senderId missing or invalid')
+                this.sendErrorAndClose(conn, '`senderId` missing or invalid')
                 return
             }
+
+            // ---------- message is valid join ----------
 
             // map peerID to connection
             this.peers.set(join.senderId, conn)
             this.byConn.set(conn, { joined: true, peerId: join.senderId })
 
-            // Helper to send a "peer" announcement: A is being announced to B
-            const announce = (announcedPeerId:string, toClientId:string) => {
-                const msg:PeerMessage = {
-                    type: 'peer',
-                    senderId: announcedPeerId,  // the peer being announced
-                    targetId: toClientId,  // the client who should learn about it
-                    selectedProtocolVersion: SUPPORTED_PROTOCOL_VERSION,
-                    peerMetadata: {},
-                }
-                const toConn = this.peers.get(toClientId)
-                if (toConn) toConn.send(toArrayBuffer(cborEncode(msg)))
-            }
-
             // 1) Tell the new client about all existing peers
             for (const existingId of this.peers.keys()) {
                 if (existingId === join.senderId) continue
-                announce(existingId, join.senderId)
+                this.announce(existingId, join.senderId)
             }
 
             // 2) Tell all existing peers about the new client
             for (const [existingId, _existingConn] of this.peers) {
                 if (existingId === join.senderId) continue
-                announce(join.senderId, existingId)
+                this.announce(join.senderId, existingId)
             }
 
             return
@@ -157,8 +138,9 @@ export class MergeParty implements Party.Server {
         let msg:BaseMsg|undefined
         try {
             msg = cborDecode(new Uint8Array(raw)) as BaseMsg
-        } catch (_err) {
+        } catch (err) {
             // If decode fails, just drop the message (should not happen)
+            console.log('**bad message**', err)
             return
         }
 
@@ -196,7 +178,22 @@ export class MergeParty implements Party.Server {
         }
     }
 
-    // Optional HTTP endpoint for health check
+    private announce (announcedPeerId:string, toClientId:string) {
+        const msg:PeerMessage = {
+            type: 'peer',
+            senderId: announcedPeerId,  // the peer being announced
+            targetId: toClientId,  // the client who should learn about it
+            selectedProtocolVersion: SUPPORTED_PROTOCOL_VERSION,
+            peerMetadata: {},
+        }
+
+        const toConn = this.peers.get(toClientId)
+        if (toConn) {
+            toConn.send(toArrayBuffer(cborEncode(msg)))
+        }
+    }
+
+    // HTTP endpoint for health check
     async onRequest (req:Party.Request) {
         const url = new URL(req.url)
         console.log('**url path**', url.pathname)
