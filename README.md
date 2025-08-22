@@ -45,7 +45,7 @@ Create a backend (the websocket/partykit server) and a browser client.
 
 ### Backend
 
-You just need to export a class that extends the `MergeParty` class from this
+Just need to export a class that extends the `MergeParty` class from this
 module.
 
 See [./example_backend](./example_backend/).
@@ -55,7 +55,7 @@ import { MergeParty, CORS } from '@substrate-system/mergeparty'
 
 export default class ExampleServer extends MergeParty {
   static async onBeforeConnect (request:Party.Request, _lobby:Party.Lobby) {
-    // do authentication in here
+    // auth goes here
   }
 }
 ```
@@ -85,7 +85,7 @@ Response:
 ```js
 {
   "status": "ok",
-  "room": "aaa",
+  "room": "my-document-id",
   "connectedPeers": 0
 }
 ```

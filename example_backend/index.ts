@@ -11,7 +11,7 @@ export default class ExampleServer extends MergeParty {
      */
     static async onBeforeConnect (request:Party.Request, _lobby:Party.Lobby) {
         try {
-            // do some authorization here
+            // auth here
 
             // forward the request to `onConnect`
             return request
