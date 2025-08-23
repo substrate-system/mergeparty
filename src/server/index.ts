@@ -14,9 +14,6 @@ export const CORS = {
 }
 
 // Message shapes we care about.
-// If you import exact types from
-// `@automerge/automerge-repo-network-websocket/dist/messages`,
-// you can replace these with those.
 interface BaseMsg {
     type:'join'|'peer'|'request'|'sync';
     senderId?:string;
