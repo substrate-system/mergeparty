@@ -70,7 +70,7 @@
     "@substrate-system/css-normalize": "^0.0.13",
     "@substrate-system/dom": "^0.1.7",
     "@substrate-system/signs": "^0.2.2",
-    "@substrate-system/tapout": "^0.0.4",
+    "@substrate-system/tapout": "^0.0.16",
     "@substrate-system/tapzero": "^0.10.15",
     "@substrate-system/text-input": "^0.1.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
