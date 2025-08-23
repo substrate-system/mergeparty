@@ -94,6 +94,47 @@ Response:
 
 See [./example/](./example/) for the browser version.
 
+This is a small wrapper around [@automerge/automerge-repo-network-websocket](https://github.com/automerge/automerge-repo/tree/main/packages/automerge-repo-network-websocket),
+just adding some parameters for partykit.
+
+```ts
+export class PartykitNetworkAdapter extends WebSocketClientAdapter {
+    constructor (options:{
+      host?:string
+      room:string
+      party?:string
+    })
+```
+
+#### Browser Example
+
+Create a new in-browser automerge node.
+
+```ts
+import {
+    IndexedDBStorageAdapter
+} from '@automerge/automerge-repo-storage-indexeddb'
+import { PartykitNetworkAdapter } from '@substrate-system/merge-party/client'
+
+const repo = new Repo({
+    storage: new IndexedDBStorageAdapter(),
+})
+
+const doc = repo.create({ text: '' })
+documentId = doc.documentId
+
+// use the document ID as the room name
+const networkAdapter = new PartykitNetworkAdapter({
+    host: PARTYKIT_HOST,
+    room: documentId
+})
+
+repo.networkSubsystem.addNetworkAdapter(networkAdapter)
+await networkAdapter.whenReady()
+
+// ... use the repo ...
+```
+
 ## Modules
 
 This exposes ESM and common JS via

@@ -16,8 +16,6 @@ interface PartyKitNetworkAdapterOptions {
  * that constructs the correct PartyKit WebSocket URL.
  */
 export class PartykitNetworkAdapter extends WebSocketClientAdapter {
-    #options:PartyKitNetworkAdapterOptions
-
     constructor (options:PartyKitNetworkAdapterOptions) {
         // Construct the PartyKit WebSocket URL
         const host = options.host || 'localhost:1999'
@@ -33,7 +31,5 @@ export class PartykitNetworkAdapter extends WebSocketClientAdapter {
 
         // Call the parent constructor with the constructed URL
         super(url)
-
-        this.#options = options
     }
 }

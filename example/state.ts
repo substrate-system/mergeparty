@@ -76,7 +76,7 @@ State.connect = async function (
 ):Promise<PartySocket|null> {
     const repo = state.repo
     if (!documentId) {
-        const doc = await State.createDoc(state)
+        const doc = State.createDoc(state)
         documentId = doc.documentId
     }
 
@@ -107,12 +107,12 @@ State.connect = async function (
             try {
                 debug('Attempting to find document:', documentId)
                 const doc = await repo.find<AppDoc>(documentId as AnyDocumentId)
-                state.document.value = doc
 
                 // Wait for it to be ready
                 // (this will trigger network sync if needed)
                 debug('Waiting for document to be ready...')
                 await doc.whenReady()
+                state.document.value = doc
                 debug('Document is ready, content:', doc.doc())
             } catch (error) {
                 const err = error as Error
