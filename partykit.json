@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.partykit.io/schema.json",
-  "name": "merge-party",
+  "name": "mergeparty",
   "main": "example_backend/index.ts",
   "compatibilityDate": "2025-08-14"
 }
