@@ -51,7 +51,7 @@ module.
 See [./example_backend](./example_backend/).
 
 ```js
-import { MergeParty, CORS } from '@substrate-system/mergeparty'
+import { MergeParty, CORS } from '@substrate-system/mergeparty/server'
 
 export default class ExampleServer extends MergeParty {
   static async onBeforeConnect (request:Party.Request, _lobby:Party.Lobby) {
